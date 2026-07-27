@@ -48,7 +48,11 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
 
 ## What's here
 
-- `index.html` + `js/capture.js` — patient-facing capture app. Runs a
+- `index.html` — landing page. Introduces Flexion, surfaces the
+  evidence-tier summary for all six movements, and links to the patient
+  capture demo and provider dashboard. This is the front door for anyone
+  (partners, reviewers) landing on the deployed site.
+- `capture.html` + `js/capture.js` — patient-facing capture app. Runs a
   6-movement routine (squat, 5x sit-to-stand, arm raise, single-leg
   balance x2, walk in place), overlays the detected skeleton live, checks
   camera framing before starting, and produces a session report with an
@@ -79,7 +83,8 @@ python3 -m http.server 8000
 ```
 
 Then open:
-- `http://localhost:8000/index.html` — patient capture (needs a webcam)
+- `http://localhost:8000/index.html` — home page (evidence summary + links)
+- `http://localhost:8000/capture.html` — patient capture (needs a webcam)
 - `http://localhost:8000/dashboard.html` — provider dashboard
 
 Grant camera permission when prompted. The pose model

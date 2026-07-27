@@ -1,5 +1,5 @@
 // Flexion — provider dashboard (prototype).
-// Reads sessions saved to this browser's localStorage by index.html and
+// Reads sessions saved to this browser's localStorage by capture.html and
 // renders a sortable table plus a trend chart per patient/movement.
 // In a production build, this would instead call a backend API that
 // stores sessions server-side per authenticated provider/patient — see
@@ -73,7 +73,7 @@ function flattenSessions(reports) {
 
 function renderTable(rows) {
   if (!rows.length) {
-    tableWrap.innerHTML = `<div class="empty-state">No sessions yet. Run a routine in the patient capture app (index.html) and click "Save to Provider Dashboard".</div>`;
+    tableWrap.innerHTML = `<div class="empty-state">No sessions yet. Run a routine in the patient capture app (capture.html) and click "Save to Provider Dashboard".</div>`;
     return;
   }
   const html = `

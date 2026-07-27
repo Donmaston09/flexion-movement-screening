@@ -4,70 +4,169 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flexion — Movement Screening</title>
+  <title>Flexion — Remote Movement Screening for Telehealth</title>
+  <meta name="description" content="Flexion turns a webcam into an evidence-graded movement screen: patients film a guided routine, on-device pose estimation scores it in real time, and providers see the trend — each score labeled with how much the published literature actually supports it." />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 
 <body>
   <header class="topbar">
     <div class="brand">Flexion<span class="brand-dot">.</span></div>
-    <div class="topbar-sub">Remote Movement Screening — Patient Capture (Prototype)</div>
+    <div class="topbar-sub">Remote Movement Screening for Telehealth</div>
+    <nav class="mainnav">
+      <a href="index.html" class="active">Home</a>
+      <a href="capture.html">Patient Capture</a>
+      <a href="dashboard.html">Provider Dashboard</a>
+    </nav>
   </header>
 
-  <main class="capture-layout">
-    <section class="video-pane">
-      <div class="video-wrap">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="overlay"></canvas>
+  <main class="landing">
+
+    <section class="hero">
+      <h1>Telehealth gave doctors the ability to see patients anywhere.<br />Flexion gives them back the ability to watch them move.</h1>
+      <p class="hero-sub">
+        A patient films a short guided movement routine on a webcam. On-device pose
+        estimation scores range of motion, symmetry, and stability in real time — no
+        video ever leaves the browser. A provider dashboard turns sessions into
+        trends. Every score carries an evidence tier, so nothing is presented with
+        more confidence than the published literature supports.
+      </p>
+      <div class="hero-cta">
+        <a href="capture.html" class="primary">Try the Patient Capture Demo</a>
+        <a href="dashboard.html" class="secondary">View Provider Dashboard</a>
       </div>
-      <div class="controls">
-        <input id="patientName" type="text" placeholder="Patient name (demo only)" />
-        <button id="startBtn" class="primary">Start Routine</button>
+      <div class="stats-row">
+        <div class="stat"><strong>6</strong><span>movements screened per routine</span></div>
+        <div class="stat"><strong>20</strong><span>papers underpinning the evidence tiers</span></div>
+        <div class="stat"><strong>0</strong><span>frames of video leave the device</span></div>
       </div>
-      <p id="trackingQuality" class="tracking-quality"></p>
-      <p id="status" class="status">Initializing...</p>
     </section>
 
-    <section class="side-pane">
-      <div class="panel">
-        <h2>Instructions</h2>
-        <p id="instruction">Click "Start Routine" and follow the on-screen prompts. All processing runs locally in your
-          browser — no video is uploaded.</p>
-        <div class="live-row">
-          <span id="liveMetric"></span>
-          <span id="timer" class="timer"></span>
+    <section class="panel note landing-note">
+      <strong>Prototype, pilot-ready:</strong> this build is a fully working
+      demonstration of the core mechanic — pose detection to clinical scoring — not
+      yet a finished clinical product. It is the vehicle for the pilot validation
+      study described in the Technical Spec, run against real PT assessments before
+      any clinical claim is made.
+    </section>
+
+    <section id="evidence" class="evidence-section">
+      <h2>Grounded in the evidence, movement by movement</h2>
+      <p class="section-intro">
+        Accuracy in markerless, single-camera motion capture is not uniform across
+        movements. Spatiotemporal gait measures and sagittal-plane hip/knee
+        kinematics are well-supported in the literature; frontal/transverse-plane
+        and complex multi-directional movement are not; and dynamic transitional
+        tasks — like standing up — show wider measurement error than static joint
+        positions, even on otherwise-accurate systems. Flexion's scoring engine
+        encodes that directly: every score carries the tier the evidence actually
+        supports, not a uniform badge of confidence.
+      </p>
+
+      <div class="evidence-grid">
+        <div class="evidence-card evidence-high">
+          <span class="evidence-badge">High confidence</span>
+          <h3>Squat — knee flexion</h3>
+          <p>Sagittal-plane knee flexion at the near-static bottom of a squat is the
+            best-supported accuracy profile in the literature: mean error &lt;1.1°
+            and limits of agreement &lt;5° against lab-based marker systems, even in
+            space-constrained clinical settings.</p>
+          <p class="evidence-citation">Ruder et al. 2026; Scataglini et al. 2024</p>
         </div>
-      </div>
 
-      <div class="panel">
-        <h2>Session Summary</h2>
-        <div id="summary" class="summary-grid"></div>
-        <div class="summary-actions">
-          <button id="saveBtn" disabled>Save to Provider Dashboard (demo)</button>
-          <button id="downloadBtn" disabled>Download Report (JSON / mock FHIR)</button>
+        <div class="evidence-card evidence-high">
+          <span class="evidence-badge">High confidence (reps &amp; time)</span>
+          <h3>5x Sit-to-Stand</h3>
+          <p>Scored as repetitions and total time — the established
+            Five-Times-Sit-to-Stand functional/fall-risk metric — rather than
+            knee-angle depth. Transitional joint angles showed wide limits of
+            agreement (12–20°) even where other markerless measures were reliable,
+            so Flexion deliberately withholds an STS angle reading.</p>
+          <p class="evidence-citation">Ruder et al. 2026; Zischke et al. 2021</p>
         </div>
-      </div>
 
-      <div class="panel note">
-        <strong>Prototype notice:</strong> This demo uses on-device pose estimation
-        (MediaPipe) and simple angle/ROM math for demonstration. It is not a
-        validated diagnostic device. See the pilot validation plan in the
-        accompanying spec document before any clinical use.
-      </div>
+        <div class="evidence-card evidence-moderate">
+          <span class="evidence-badge">Moderate confidence</span>
+          <h3>Arm raise — ROM</h3>
+          <p>Simple flexion/abduction shows good-to-excellent validity in
+            single-camera systems. Not validated for rotational or multi-planar
+            shoulder mobility, which remains inconsistent across studies.</p>
+          <p class="evidence-citation">Lee et al. 2025</p>
+        </div>
 
-      <div class="panel note">
-        <strong>Evidence-graded scoring:</strong> each movement below is labeled
-        High confidence, Moderate confidence, or Exploratory, based on a
-        literature review of markerless motion-capture validation studies —
-        not all movement types have the same evidence behind them, and the
-        report says so. See <code>study manuscript documents</code>
-        and <code>literature reviews </code> for the underlying review.
+        <div class="evidence-card evidence-high">
+          <span class="evidence-badge">High confidence (cadence &amp; step count)</span>
+          <h3>Walk in place</h3>
+          <p>Spatiotemporal gait parameters — step count, cadence, timing — are the
+            best-validated markerless outputs in the literature, with inter-rater
+            reliability and concurrent validity reaching good-to-excellent ICC
+            (0.81–0.98). Step-height asymmetry is a secondary proxy with lower
+            confidence.</p>
+          <p class="evidence-citation">Scataglini et al. 2024</p>
+        </div>
+
+        <div class="evidence-card evidence-exploratory">
+          <span class="evidence-badge">Exploratory</span>
+          <h3>Single-leg balance</h3>
+          <p>The least evidence-covered domain reviewed for Flexion. Reported as a
+            within-patient trend indicator, not an absolute clinical measurement,
+            until pilot-validated against a clinical balance assessment.</p>
+          <p class="evidence-citation">Flexion literature evidence review, 2026</p>
+        </div>
+
+        <div class="evidence-card evidence-reference">
+          <span class="evidence-badge">Full review</span>
+          <h3>The underlying literature</h3>
+          <p>The complete 20-paper review, citation list, and the peer-review-format
+            manuscript drawn from it ship alongside this app —
+            <code>literature_research_on_the_app.docx</code>,
+            <code>literature_citations_on_app.csv</code>, and
+            <code>Flexion-Manuscript-JMIR-Rehab.docx</code> in the repository.</p>
+        </div>
       </div>
     </section>
+
+    <section class="steps-section">
+      <h2>How it works</h2>
+      <div class="steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <h3>Patient films a guided routine</h3>
+          <p>Squat, 5x sit-to-stand, arm raise, single-leg balance (both sides), and
+            walk-in-place — six movements, one webcam, a few minutes.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <h3>On-device scoring, live</h3>
+          <p>MediaPipe pose estimation runs locally in the browser. A framing check
+            confirms the whole body is tracked before scoring starts, and the
+            skeleton overlay shows what the model sees in real time.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <h3>Provider sees the trend</h3>
+          <p>Every session lands on the provider dashboard as a row and a chart
+            point, each metric tagged with its evidence tier and shaped as a mock
+            FHIR Observation — ready to wire into a real EHR.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-footer">
+      <h2>See it for yourself</h2>
+      <div class="hero-cta">
+        <a href="capture.html" class="primary">Try the Patient Capture Demo</a>
+        <a href="dashboard.html" class="secondary">View Provider Dashboard</a>
+      </div>
+    </section>
+
   </main>
 
-  <script src="js/scoring.js"></script>
-  <script type="module" src="js/capture.js"></script>
+  <footer class="landing-footer">
+    Flexion is a research prototype. Not a validated diagnostic device. See
+    <code>Flexion-Technical-Spec.docx</code> for the production architecture, data
+    model, EHR integration, and pilot validation plan.
+  </footer>
 </body>
 
 </html>
