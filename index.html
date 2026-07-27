@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flexion — Movement Screening</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">Flexion<span class="brand-dot">.</span></div>
+    <div class="topbar-sub">Remote Movement Screening — Patient Capture (Prototype)</div>
+  </header>
+
+  <main class="capture-layout">
+    <section class="video-pane">
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="controls">
+        <input id="patientName" type="text" placeholder="Patient name (demo only)" />
+        <button id="startBtn" class="primary">Start Routine</button>
+      </div>
+      <p id="trackingQuality" class="tracking-quality"></p>
+      <p id="status" class="status">Initializing...</p>
+    </section>
+
+    <section class="side-pane">
+      <div class="panel">
+        <h2>Instructions</h2>
+        <p id="instruction">Click "Start Routine" and follow the on-screen prompts. All processing runs locally in your
+          browser — no video is uploaded.</p>
+        <div class="live-row">
+          <span id="liveMetric"></span>
+          <span id="timer" class="timer"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Session Summary</h2>
+        <div id="summary" class="summary-grid"></div>
+        <div class="summary-actions">
+          <button id="saveBtn" disabled>Save to Provider Dashboard (demo)</button>
+          <button id="downloadBtn" disabled>Download Report (JSON / mock FHIR)</button>
+        </div>
+      </div>
+
+      <div class="panel note">
+        <strong>Prototype notice:</strong> This demo uses on-device pose estimation
+        (MediaPipe) and simple angle/ROM math for demonstration. It is not a
+        validated diagnostic device. See the pilot validation plan in the
+        accompanying spec document before any clinical use.
+      </div>
+
+      <div class="panel note">
+        <strong>Evidence-graded scoring:</strong> each movement below is labeled
+        High confidence, Moderate confidence, or Exploratory, based on a
+        literature review of markerless motion-capture validation studies —
+        not all movement types have the same evidence behind them, and the
+        report says so. See <code>study manuscript documents</code>
+        and <code>literature reviews </code> for the underlying review.
+      </div>
+    </section>
+  </main>
+
+  <script src="js/scoring.js"></script>
+  <script type="module" src="js/capture.js"></script>
+</body>
+
+</html>

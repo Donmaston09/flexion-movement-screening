@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flexion — Provider Dashboard</title>
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Flexion<span class="brand-dot">.</span></div>
+    <div class="topbar-sub">Provider Dashboard (Prototype) — reads sessions saved from index.html on this device</div>
+  </header>
+
+  <main class="dash-layout">
+    <div class="dash-toolbar">
+      <label for="patientFilter">Patient:</label>
+      <select id="patientFilter"><option value="all">All patients</option></select>
+      <label for="movementFilter">Movement:</label>
+      <select id="movementFilter">
+        <option value="squat">Squat — knee flexion</option>
+        <option value="sit_to_stand">5x Sit-to-Stand — time</option>
+        <option value="arm_raise">Arm raise — ROM</option>
+        <option value="balance">Balance — stability score</option>
+        <option value="walk_in_place">Walk in place — cadence</option>
+      </select>
+      <button id="clearBtn">Clear demo data</button>
+      <button id="seedBtn">Load sample patient history</button>
+    </div>
+
+    <p class="confidence-legend">
+      Confidence: <span class="confidence-pill tier-high">High</span> spatiotemporal / sagittal-plane / timed measures &nbsp;
+      <span class="confidence-pill tier-moderate">Moderate</span> simple planar ROM &nbsp;
+      <span class="confidence-pill tier-exploratory">Exploratory</span> balance/stability — see per-movement citation in the capture app.
+    </p>
+
+    <div id="tableWrap"></div>
+    <canvas id="trendChart" height="90"></canvas>
+  </main>
+
+  <script src="js/scoring.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
