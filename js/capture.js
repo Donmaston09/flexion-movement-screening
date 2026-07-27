@@ -100,20 +100,31 @@ let lastVideoTime = -1;
 let calibrationGoodSinceTs = null;
 const results = [];
 
+// Some mobile browsers (notably older iOS Safari) don't reliably support
+// the GPU delegate for WASM inference. Try GPU first for speed, and fall
+// back to CPU automatically rather than leaving the app stuck on phones
+// where GPU init throws.
 async function initPoseLandmarker() {
   statusEl.textContent = "Loading pose model...";
   const filesetResolver = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
   );
-  poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
-    baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-      delegate: "GPU",
-    },
-    runningMode: "VIDEO",
-    numPoses: 1,
-  });
+  const modelAssetPath =
+    "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  try {
+    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: { modelAssetPath, delegate: "GPU" },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+  } catch (err) {
+    statusEl.textContent = "Falling back to CPU mode for this device...";
+    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: { modelAssetPath, delegate: "CPU" },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+  }
   statusEl.textContent = "Model loaded. Click Start Routine.";
 }
 

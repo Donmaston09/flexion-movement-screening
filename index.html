@@ -6,6 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Flexion — Remote Movement Screening for Telehealth</title>
   <meta name="description" content="Flexion turns a webcam into an evidence-graded movement screen: patients film a guided routine, on-device pose estimation scores it in real time, and providers see the trend — each score labeled with how much the published literature actually supports it." />
+  <meta name="author" content="Anthony Onoja, Ph.D., School of Health Sciences, University of Surrey" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="assets/favicon-32.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Flexion" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 
@@ -152,6 +160,39 @@
       </div>
     </section>
 
+    <section class="install-section">
+      <h2>Works on your phone — no App Store needed</h2>
+      <p class="section-intro">
+        Flexion runs in the browser on iPhone and Android. Add it to your home
+        screen and it opens full-screen, like an installed app.
+      </p>
+      <div class="install-grid">
+        <div class="install-card">
+          <h3>iPhone / iPad (Safari)</h3>
+          <ol>
+            <li>Open <code>capture.html</code> in <strong>Safari</strong> (not Chrome — iOS requires Safari for this).</li>
+            <li>Tap the <strong>Share</strong> icon (square with an arrow) in the toolbar.</li>
+            <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+            <li>Tap <strong>Add</strong>. A Flexion icon appears on your home screen.</li>
+          </ol>
+        </div>
+        <div class="install-card">
+          <h3>Android (Chrome)</h3>
+          <ol>
+            <li>Open <code>capture.html</code> in Chrome.</li>
+            <li>Tap the <strong>⋮</strong> menu in the top right.</li>
+            <li>Tap <strong>Add to Home screen</strong> (or <strong>Install app</strong> if offered).</li>
+            <li>Confirm. A Flexion icon appears on your home screen.</li>
+          </ol>
+        </div>
+      </div>
+      <p class="install-note">
+        Grant camera access when prompted — everything still runs on-device;
+        nothing is uploaded. For best tracking, prop the phone up so your whole
+        body is visible in the frame before starting a routine.
+      </p>
+    </section>
+
     <section class="cta-footer">
       <h2>See it for yourself</h2>
       <div class="hero-cta">
@@ -163,9 +204,17 @@
   </main>
 
   <footer class="landing-footer">
-    Flexion is a research prototype. Not a validated diagnostic device. See
-    <code>Flexion-Technical-Spec.docx</code> for the production architecture, data
-    model, EHR integration, and pilot validation plan.
+    <p>
+      Flexion is a research prototype. Not a validated diagnostic device. See
+      <code>Flexion-Technical-Spec.docx</code> for the production architecture, data
+      model, EHR integration, and pilot validation plan.
+    </p>
+    <p class="author-credit">
+      Created by <strong>Anthony Onoja, Ph.D.</strong> — School of Health Sciences,
+      Faculty of Health and Medical Sciences, University of Surrey, United Kingdom
+      · <a href="mailto:a.onoja@surrey.ac.uk">a.onoja@surrey.ac.uk</a>
+      · <a href="mailto:donmaston09@gmail.com">donmaston09@gmail.com</a>
+    </p>
   </footer>
 </body>
 

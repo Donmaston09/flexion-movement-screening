@@ -1,5 +1,10 @@
 # Flexion — Remote Movement Screening Prototype
 
+**Author:** Anthony Onoja, Ph.D. — School of Health Sciences, Faculty of
+Health and Medical Sciences, University of Surrey, United Kingdom.
+Contact: [a.onoja@surrey.ac.uk](mailto:a.onoja@surrey.ac.uk) ·
+[donmaston09@gmail.com](mailto:donmaston09@gmail.com)
+
 A working, browser-only prototype of the concept: a patient films a short
 guided movement routine on a webcam, on-device pose estimation scores
 range of motion / symmetry / stability in real time, and a provider
@@ -120,6 +125,26 @@ All of this runs from a single library, `js/scoring.js`, that takes plain
 landmark objects (`{x, y, visibility}`) — see `test/scoring.test.js` for
 how frames are constructed synthetically without a real pose model, and
 `FlexionScoring.EVIDENCE` for the full citation text behind each tier.
+
+## Mobile / iPhone
+
+The app is responsive and works on phones — the layout collapses to a
+single column, controls stack for touch, and the pose model automatically
+falls back from GPU to CPU inference if a device's browser doesn't support
+the GPU delegate (this matters on some iOS Safari versions).
+
+To add it to a phone's home screen so it opens full-screen like an app:
+
+- **iPhone/iPad:** open `capture.html` in **Safari** → tap **Share** →
+  **Add to Home Screen**.
+- **Android:** open `capture.html` in **Chrome** → tap **⋮** → **Add to
+  Home screen** (or **Install app**).
+
+This is a standard "Add to Home Screen" web app (manifest + Apple meta
+tags in `manifest.json`/each page's `<head>`), not an App Store app — no
+install review, no download, just a bookmark with an icon. Camera access
+still requires the page to be served over HTTPS (or `localhost`); once
+deployed (e.g. to Render, as this project is), that's automatic.
 
 ## Known limitations (by design, for a prototype)
 
