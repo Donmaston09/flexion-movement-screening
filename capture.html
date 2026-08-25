@@ -36,7 +36,20 @@
       <div class="controls">
         <input id="patientName" type="text" placeholder="Patient name (demo only)" />
         <button id="startBtn" class="primary">Start Routine</button>
+        <button id="audioToggleBtn" type="button" aria-pressed="true">🔊 Audio instructions: On</button>
       </div>
+      <label class="advanced-toggle">
+        <input id="includeAdvanced" type="checkbox" />
+        Include advanced movements (bodyweight squat, single-leg balance) —
+        for fitter or younger patients only; see note below.
+      </label>
+      <p class="camera-tip">
+        <strong>Camera setup tip:</strong> stand far enough back that your whole
+        body — shoulders to ankles — fits in the frame. On a MacBook, if the
+        picture keeps zooming in on your face instead of showing your whole
+        body, turn off <strong>Center Stage</strong> in Control Center before
+        starting — it auto-frames on faces and can crop out the rest of you.
+      </p>
       <p id="trackingQuality" class="tracking-quality"></p>
       <p id="status" class="status">Initializing...</p>
     </section>
@@ -44,12 +57,23 @@
     <section class="side-pane">
       <div class="panel">
         <h2>Instructions</h2>
-        <p id="instruction">Click "Start Routine" and follow the on-screen prompts. All processing runs locally in your
-          browser — no video is uploaded.</p>
+        <p id="instruction">Click "Start Routine" and follow the on-screen and spoken prompts. All processing runs
+          locally in your browser — no video is uploaded.</p>
         <div class="live-row">
           <span id="liveMetric"></span>
           <span id="timer" class="timer"></span>
         </div>
+      </div>
+
+      <div class="panel note">
+        <strong>Who this routine is for:</strong> the default battery (5x
+        sit-to-stand, arm raise, feet-together static balance, walk in place)
+        is scoped around a single coherent population — older adults and
+        falls-risk / general functional screening — rather than mixing in
+        movements that could themselves be a fall risk for that group. The
+        "advanced movements" option above adds a full bodyweight squat and
+        single-leg balance testing, which are more appropriate for fitter or
+        younger patients and are opt-in rather than default for that reason.
       </div>
 
       <div class="panel">

@@ -22,6 +22,41 @@ const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const patientNameInput = document.getElementById("patientName");
 const trackingQualityEl = document.getElementById("trackingQuality");
+const includeAdvancedInput = document.getElementById("includeAdvanced");
+const audioToggleBtn = document.getElementById("audioToggleBtn");
+
+// ---------------------------------------------------------------------
+// Spoken instructions
+// ---------------------------------------------------------------------
+// Reviewer feedback: the framing check asks patients to stand far enough
+// back for full-body tracking, but that's often too far to read the
+// on-screen instruction text. Speaking instructions aloud (in addition to,
+// not instead of, the on-screen text — for anyone who can't hear or has
+// audio muted) removes that trade-off. Guarded behind a toggle so it can
+// be turned off (shared/quiet spaces, hearing aids that pick up device
+// audio poorly, personal preference).
+let audioEnabled = true;
+let lastSpoken = null;
+
+function speak(text) {
+  if (!audioEnabled || !text) return;
+  if (typeof window.speechSynthesis === "undefined") return;
+  if (text === lastSpoken) return; // don't re-speak an unchanged instruction every frame
+  lastSpoken = text;
+  window.speechSynthesis.cancel(); // don't queue/overlap with the previous prompt
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.95;
+  window.speechSynthesis.speak(utter);
+}
+
+if (audioToggleBtn) {
+  audioToggleBtn.addEventListener("click", () => {
+    audioEnabled = !audioEnabled;
+    audioToggleBtn.textContent = audioEnabled ? "🔊 Audio instructions: On" : "🔇 Audio instructions: Off";
+    audioToggleBtn.setAttribute("aria-pressed", String(audioEnabled));
+    if (!audioEnabled && typeof window.speechSynthesis !== "undefined") window.speechSynthesis.cancel();
+  });
+}
 
 // How long good/fair framing must hold before the timed routine begins.
 // Standardizing camera setup before scoring starts is a direct response
@@ -30,17 +65,18 @@ const trackingQualityEl = document.getElementById("trackingQuality");
 // al. 2020 and the accuracy-vs-framing findings in Ruder et al. 2026.
 const CALIBRATION_HOLD_MS = 1200;
 
-const ROUTINE = [
-  {
-    key: "squat",
-    label: "Bodyweight Squats",
-    instruction: "Stand facing the camera, feet hip-width apart. Perform 5 slow squats.",
-    kind: "reps",
-    target: 5,
-    makeTracker: () => FlexionScoring.createSquatTracker(),
-    isDone: (tracker) => tracker._state.reps.length >= 5,
-    liveText: (tracker) => `Reps: ${tracker._state.reps.length} / 5  ·  Phase: ${tracker._state.phase}`,
-  },
+// Movement battery, reordered and re-scoped around a single coherent
+// target population — older adults / falls-risk & general functional
+// screening — following clinical review feedback (Danny, physiotherapist
+// reviewer, Aug 2026). The original battery mixed movements suited to a
+// frail-elderly population (sit-to-stand, gait, feet-together balance)
+// with movements that could themselves pose a fall risk for that same
+// population (an unmodified single-leg balance test, a full bodyweight
+// squat). Rather than serve every population moderately, Flexion now
+// defaults to the safer, coherent elderly/falls-risk-and-function battery,
+// and gates the higher-difficulty movements behind an explicit opt-in for
+// fitter or younger populations where they're clinically appropriate.
+const CORE_MOVEMENTS = [
   {
     key: "sit_to_stand",
     label: "5x Sit-to-Stand",
@@ -62,21 +98,12 @@ const ROUTINE = [
       `Max L: ${Math.round(tracker._state.maxLeft)}°  Max R: ${Math.round(tracker._state.maxRight)}°`,
   },
   {
-    key: "balance_left",
-    label: "Single-Leg Balance — Left",
-    instruction: "Stand on your left leg. Hold as steady as you can.",
+    key: "balance_tandem",
+    label: "Static Balance — Feet Together",
+    instruction: "Stand with your feet together, arms relaxed at your sides. Hold as steady as you can. Stay near a wall or sturdy chair in case you need to steady yourself.",
     kind: "duration",
     seconds: 10,
-    makeTracker: () => FlexionScoring.createBalanceTracker(),
-    liveText: (tracker) => `Hold time: ${tracker._state.positions.length} frames`,
-  },
-  {
-    key: "balance_right",
-    label: "Single-Leg Balance — Right",
-    instruction: "Stand on your right leg. Hold as steady as you can.",
-    kind: "duration",
-    seconds: 10,
-    makeTracker: () => FlexionScoring.createBalanceTracker(),
+    makeTracker: () => FlexionScoring.createBalanceTracker({ stance: "feet_together" }),
     liveText: (tracker) => `Hold time: ${tracker._state.positions.length} frames`,
   },
   {
@@ -90,11 +117,70 @@ const ROUTINE = [
   },
 ];
 
+// Higher-difficulty movements: appropriate for fitter, younger, or
+// post-surgical (non-frail) patients, but a plausible fall risk if run
+// unmodified on a frail older adult — so these only run if the operator
+// explicitly opts in via the "Include advanced movements" checkbox on the
+// capture page, rather than by default.
+const ADVANCED_MOVEMENTS = [
+  {
+    key: "squat",
+    label: "Bodyweight Squats",
+    instruction: "Stand facing the camera, feet hip-width apart. Perform 5 slow squats.",
+    kind: "reps",
+    target: 5,
+    makeTracker: () => FlexionScoring.createSquatTracker(),
+    isDone: (tracker) => tracker._state.reps.length >= 5,
+    liveText: (tracker) => `Reps: ${tracker._state.reps.length} / 5  ·  Phase: ${tracker._state.phase}`,
+  },
+  {
+    key: "balance_left",
+    label: "Single-Leg Balance — Left",
+    instruction: "Stand on your left leg. Hold as steady as you can.",
+    kind: "duration",
+    seconds: 10,
+    makeTracker: () => FlexionScoring.createBalanceTracker({ stance: "single_leg" }),
+    liveText: (tracker) => `Hold time: ${tracker._state.positions.length} frames`,
+  },
+  {
+    key: "balance_right",
+    label: "Single-Leg Balance — Right",
+    instruction: "Stand on your right leg. Hold as steady as you can.",
+    kind: "duration",
+    seconds: 10,
+    makeTracker: () => FlexionScoring.createBalanceTracker({ stance: "single_leg" }),
+    liveText: (tracker) => `Hold time: ${tracker._state.positions.length} frames`,
+  },
+];
+
+// Built once Start is pressed, based on the "Include advanced movements"
+// checkbox, so the same page can run either the default elderly/falls-risk
+// battery or the fuller set. Order: core functional movements first, with
+// squat inserted after sit-to-stand and the single-leg variants inserted
+// after the feet-together balance test, so difficulty ramps gradually
+// rather than front- or back-loading the harder movements.
+function buildActiveRoutine(includeAdvanced) {
+  if (!includeAdvanced) return CORE_MOVEMENTS.slice();
+  const squat = ADVANCED_MOVEMENTS.find((m) => m.key === "squat");
+  const balanceLeft = ADVANCED_MOVEMENTS.find((m) => m.key === "balance_left");
+  const balanceRight = ADVANCED_MOVEMENTS.find((m) => m.key === "balance_right");
+  const out = [];
+  CORE_MOVEMENTS.forEach((m) => {
+    out.push(m);
+    if (m.key === "sit_to_stand") out.push(squat);
+    if (m.key === "balance_tandem") out.push(balanceLeft, balanceRight);
+  });
+  return out;
+}
+
+let ROUTINE = CORE_MOVEMENTS.slice();
+
 let poseLandmarker = null;
 let running = false;
 let mode = "idle"; // idle | calibrating | routine
 let stepIndex = -1;
 let currentTracker = null;
+let currentDropout = null;
 let stepStartTs = null;
 let lastVideoTime = -1;
 let calibrationGoodSinceTs = null;
@@ -174,8 +260,22 @@ function renderLoop() {
     } else if (mode === "routine") {
       const step = ROUTINE[stepIndex];
       if (step && currentTracker) {
-        currentTracker.addFrame(lm, nowMs);
-        metricEl.textContent = step.liveText(currentTracker);
+        // A real-world session isn't a clean lab recording — someone
+        // walks past, a pet wanders into frame, the patient briefly steps
+        // out of view. Rather than silently feeding a low-confidence or
+        // no-pose frame into the rep/hold counters (which is how a stray
+        // interruption turns into a wrong count), pause scoring for as
+        // long as tracking stays poor, tell the patient what's happening,
+        // and flag the result afterward so a provider knows this step's
+        // numbers may be affected.
+        const dropoutActive = currentDropout ? currentDropout.record(quality.tier, nowMs) : false;
+        if (dropoutActive) {
+          instructionEl.textContent = "Tracking interrupted — please step back into frame.";
+          speak("Tracking lost. Please step back into frame.");
+        } else {
+          currentTracker.addFrame(lm, nowMs);
+          metricEl.textContent = step.liveText(currentTracker);
+        }
 
         const elapsed = (nowMs - stepStartTs) / 1000;
         if (step.kind === "duration") {
@@ -214,10 +314,12 @@ function runCalibrationFrame(quality, nowMs) {
   } else {
     calibrationGoodSinceTs = null;
     timerEl.textContent = "";
-    instructionEl.textContent =
+    const msg =
       quality.tier === "no_pose"
         ? "No one detected. Step into frame, facing the camera."
         : "Step back so your whole body — shoulders to ankles — is visible in the frame.";
+    instructionEl.textContent = msg;
+    speak(msg);
   }
 }
 
@@ -227,6 +329,15 @@ function advanceStep() {
     const summary = currentTracker.summarize();
     summary.stepKey = finishedStep.key; // disambiguates e.g. balance_left vs balance_right
     summary.stepLabel = finishedStep.label;
+    // Fold the tracking-dropout verdict for this step into its flags so a
+    // provider sees "tracking interrupted" alongside any scoring flags,
+    // rather than a clean-looking number that was actually captured
+    // through an interruption.
+    const dropoutSummary = currentDropout ? currentDropout.summary() : null;
+    if (dropoutSummary && dropoutSummary.interrupted) {
+      summary.flags = (summary.flags || []).concat("tracking_interrupted");
+      summary.trackingInterruption = dropoutSummary;
+    }
     results.push(summary);
   }
   stepIndex += 1;
@@ -236,8 +347,11 @@ function advanceStep() {
   }
   const step = ROUTINE[stepIndex];
   currentTracker = step.makeTracker();
+  currentDropout = FlexionScoring.createDropoutMonitor();
   stepStartTs = performance.now();
-  instructionEl.textContent = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${step.instruction}`;
+  const msg = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${step.instruction}`;
+  instructionEl.textContent = msg;
+  speak(`${step.label}. ${step.instruction}`);
 }
 
 function finishRoutine() {
@@ -334,7 +448,10 @@ startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
   results.length = 0;
   stepIndex = -1;
+  currentDropout = null;
+  lastSpoken = null;
   calibrationGoodSinceTs = null;
+  ROUTINE = buildActiveRoutine(!!(includeAdvancedInput && includeAdvancedInput.checked));
   summaryEl.innerHTML = "";
   saveBtn.disabled = true;
   downloadBtn.disabled = true;
@@ -343,7 +460,9 @@ startBtn.addEventListener("click", async () => {
     await initCamera();
     running = true;
     mode = "calibrating";
-    instructionEl.textContent = "Step back so your whole body — shoulders to ankles — is visible in the frame.";
+    const msg = "Step back so your whole body — shoulders to ankles — is visible in the frame.";
+    instructionEl.textContent = msg;
+    speak(msg);
     renderLoop();
   } catch (err) {
     statusEl.textContent = `Error: ${err.message}. Camera access is required.`;

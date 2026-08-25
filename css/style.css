@@ -119,6 +119,29 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .status { color: var(--text-dim); font-size: 13px; }
 
+.advanced-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.advanced-toggle input { margin-top: 2px; }
+
+.camera-tip {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.camera-tip strong { color: var(--text); }
+
 .tracking-quality {
   font-size: 12px;
   font-weight: 600;

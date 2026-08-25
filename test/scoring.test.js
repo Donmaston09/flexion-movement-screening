@@ -165,6 +165,62 @@ test("balance tracker: large sway => lower stability score and flag", () => {
   assert.ok(summary.stabilityScore < 90, `expected reduced stability, got ${summary.stabilityScore}`);
 });
 
+test("balance tracker: defaults to feet_together stance and reports it", () => {
+  const tracker = S.createBalanceTracker();
+  tracker.addFrame({ [S.LM.LEFT_HIP]: { x: 0.5, y: 0.5, visibility: 1 }, [S.LM.RIGHT_HIP]: { x: 0.5, y: 0.5, visibility: 1 } }, 0);
+  const summary = tracker.summarize();
+  assert.strictEqual(summary.stance, "feet_together");
+});
+
+test("balance tracker: honors an explicit single_leg stance and scores identically otherwise", () => {
+  const tracker = S.createBalanceTracker({ stance: "single_leg" });
+  let t = 0;
+  for (let i = 0; i < 50; i++) {
+    t += 33;
+    const lm = { [S.LM.LEFT_HIP]: { x: 0.5, y: 0.5, visibility: 1 }, [S.LM.RIGHT_HIP]: { x: 0.5, y: 0.5, visibility: 1 } };
+    tracker.addFrame(lm, t);
+  }
+  const summary = tracker.summarize();
+  assert.strictEqual(summary.stance, "single_leg");
+  assert.strictEqual(summary.evidence.tier, "exploratory");
+});
+
+// ---------------------------------------------------------------------
+test("dropout monitor: stays not-interrupted through brief poor-quality blips", () => {
+  const monitor = S.createDropoutMonitor({ dropoutThresholdMs: 800 });
+  let t = 0;
+  let anyActive = false;
+  ["good", "good", "poor", "poor", "good", "good"].forEach((tier) => {
+    t += 100; // 100ms per frame -> poor streak here is only ~200ms, under threshold
+    if (monitor.record(tier, t)) anyActive = true;
+  });
+  assert.strictEqual(anyActive, false, "a brief blip should not trigger an active dropout");
+  assert.strictEqual(monitor.summary().interrupted, false);
+});
+
+test("dropout monitor: flags interrupted after a sustained poor-quality streak", () => {
+  const monitor = S.createDropoutMonitor({ dropoutThresholdMs: 500 });
+  let t = 0;
+  let becameActive = false;
+  for (let i = 0; i < 20; i++) {
+    t += 100; // 20 frames * 100ms = up to 2s of sustained "poor"
+    if (monitor.record("poor", t)) becameActive = true;
+  }
+  assert.strictEqual(becameActive, true, "a sustained poor streak should become active before the loop ends");
+  const summary = monitor.summary();
+  assert.strictEqual(summary.interrupted, true);
+  assert.ok(summary.worstStreakMs >= 500, `expected worstStreakMs >= 500, got ${summary.worstStreakMs}`);
+});
+
+test("dropout monitor: recovering to good quality resets the streak", () => {
+  const monitor = S.createDropoutMonitor({ dropoutThresholdMs: 500 });
+  let t = 0;
+  for (let i = 0; i < 4; i++) { t += 100; monitor.record("poor", t); } // 400ms poor, under threshold
+  t += 100; monitor.record("good", t); // recovers
+  for (let i = 0; i < 4; i++) { t += 100; monitor.record("poor", t); } // another 400ms poor
+  assert.strictEqual(monitor.summary().interrupted, false, "two short poor streaks separated by good frames should not sum together");
+});
+
 // ---------------------------------------------------------------------
 test("walk tracker: counts steps from ankle oscillation", () => {
   const tracker = S.createWalkTracker();

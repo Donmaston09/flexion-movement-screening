@@ -106,7 +106,7 @@
       tier: "exploratory",
       label: "Exploratory",
       note:
-        "Balance and functional movement scoring is the least evidence-covered domain reviewed for Flexion. Treat the stability score as a within-patient trend indicator, not an absolute clinical measurement, until pilot-validated against a clinical balance assessment.",
+        "Balance and functional movement scoring is the least evidence-covered domain reviewed for Flexion. This applies equally regardless of stance (single-leg or feet-together/tandem) — the underlying sway measurement is the same computation, only the starting posture differs. Treat the stability score as a within-patient trend indicator, not an absolute clinical measurement, until pilot-validated against a clinical balance assessment (e.g. force-plate center-of-pressure comparison).",
       citation: "Flexion literature evidence review, 2026",
     },
     walk_in_place: {
@@ -151,6 +151,65 @@
     if (ratio >= 0.95) tier = "good";
     else if (ratio >= 0.75) tier = "fair";
     return { visibleCount, totalRequired: REQUIRED_FOR_QUALITY.length, ratioPct: round1(ratio * 100), tier };
+  }
+
+  // ---------------------------------------------------------------------
+  // Tracking dropout monitor
+  // ---------------------------------------------------------------------
+  // A movement being scored shouldn't silently keep counting through a
+  // real-world interruption — someone/something walks through frame, the
+  // patient steps out of view, a pet wanders in mid-test. This monitor
+  // watches the per-frame tracking-quality tier (from computeFrameQuality)
+  // across a step and reports whether tracking dropped out for long enough
+  // to cast doubt on that step's result, so the caller (capture.js) can
+  // both pause scoring while it's happening and flag the result afterward
+  // rather than reporting a number as if nothing went wrong.
+  function createDropoutMonitor(opts) {
+    const o = Object.assign({ minVisibility: 0.5, dropoutThresholdMs: 800 }, opts);
+    const state = {
+      lastTimestampMs: null,
+      poorStreakStartMs: null,
+      worstStreakMs: 0,
+      totalPoorMs: 0,
+      totalMs: 0,
+    };
+
+    function isPoor(tier) {
+      return tier === "poor" || tier === "no_pose";
+    }
+
+    // Returns true while a dropout is *currently in progress and has
+    // already exceeded the threshold* — useful for the caller to decide,
+    // frame by frame, whether to pause feeding data to the movement
+    // tracker right now.
+    function record(tier, timestampMs) {
+      if (state.lastTimestampMs != null) {
+        const dt = Math.max(0, timestampMs - state.lastTimestampMs);
+        state.totalMs += dt;
+        if (isPoor(tier)) state.totalPoorMs += dt;
+      }
+      state.lastTimestampMs = timestampMs;
+
+      if (isPoor(tier)) {
+        if (state.poorStreakStartMs == null) state.poorStreakStartMs = timestampMs;
+        const streakMs = timestampMs - state.poorStreakStartMs;
+        state.worstStreakMs = Math.max(state.worstStreakMs, streakMs);
+        return streakMs >= o.dropoutThresholdMs;
+      }
+      state.poorStreakStartMs = null;
+      return false;
+    }
+
+    function summary() {
+      return {
+        interrupted: state.worstStreakMs >= o.dropoutThresholdMs,
+        worstStreakMs: Math.round(state.worstStreakMs),
+        totalPoorMs: Math.round(state.totalPoorMs),
+        totalMs: Math.round(state.totalMs),
+      };
+    }
+
+    return { record, summary };
   }
 
   // ---------------------------------------------------------------------
@@ -333,8 +392,15 @@
   // of that point across the hold. Lower sway = more stable.
 
   function createBalanceTracker(opts) {
-    const o = Object.assign({ minVisibility: 0.5 }, opts);
-    const state = { positions: [], startTime: null, lastTime: null };
+    // `stance` describes the starting posture the patient was instructed
+    // into — "feet_together" (the default, safer test for a falls-risk /
+    // older-adult population; a Romberg-style tandem/feet-together static
+    // stance) or "single_leg" (the higher-difficulty variant, gated behind
+    // the "advanced movements" option — see capture.js). The sway
+    // computation itself (hip-midpoint path length) is identical either
+    // way; only the label and clinical framing change.
+    const o = Object.assign({ minVisibility: 0.5, stance: "feet_together" }, opts);
+    const state = { positions: [], startTime: null, lastTime: null, stance: o.stance };
 
     function addFrame(lm, timestampMs) {
       if (!lm) return null;
@@ -367,6 +433,7 @@
       const stabilityScore = round1(Math.max(0, 100 - swayRate * 400));
       return {
         movement: "balance",
+        stance: state.stance,
         holdDurationSec: round1(durationSec),
         swayPathLength: round1(pathLength),
         swayStdX: round1(swayStdX),
@@ -541,6 +608,7 @@
     EVIDENCE,
     getEvidence,
     computeFrameQuality,
+    createDropoutMonitor,
     createSquatTracker,
     createArmRaiseTracker,
     createBalanceTracker,

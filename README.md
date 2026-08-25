@@ -54,14 +54,18 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
 ## What's here
 
 - `index.html` — landing page. Introduces Flexion, surfaces the
-  evidence-tier summary for all six movements, and links to the patient
-  capture demo and provider dashboard. This is the front door for anyone
-  (partners, reviewers) landing on the deployed site.
+  evidence-tier summary and the default-vs-advanced movement split, and
+  links to the patient capture demo and provider dashboard. This is the
+  front door for anyone (partners, reviewers) landing on the deployed site.
 - `capture.html` + `js/capture.js` — patient-facing capture app. Runs a
-  6-movement routine (squat, 5x sit-to-stand, arm raise, single-leg
-  balance x2, walk in place), overlays the detected skeleton live, checks
-  camera framing before starting, and produces a session report with an
-  evidence tier attached to every movement.
+  4-movement default routine scoped to older-adult/falls-risk screening
+  (5x sit-to-stand, arm raise, feet-together static balance, walk in
+  place), with squat and single-leg balance (both sides) available via an
+  "Include advanced movements" checkbox. Overlays the detected skeleton
+  live, checks camera framing before starting, speaks instructions aloud
+  (toggleable) alongside the on-screen text, pauses scoring and flags a
+  step if tracking is lost mid-movement, and produces a session report
+  with an evidence tier attached to every movement.
 - `dashboard.html` + `js/dashboard.js` — provider dashboard. Reads saved
   sessions and renders a table (with a confidence-tier column) plus a
   trend chart per patient/movement. Includes a "Load sample patient
@@ -69,11 +73,11 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
   trend view without recording anything.
 - `js/scoring.js` — the actual clinical math: joint-angle calculation,
   rep counting, ROM, left/right symmetry, sway-based stability score,
-  gait cadence, sit-to-stand timing, frame-quality check, and the
-  evidence-tier table. Framework-free so it runs identically in the
-  browser and in Node.
+  gait cadence, sit-to-stand timing, frame-quality check, tracking-dropout
+  monitoring, and the evidence-tier table. Framework-free so it runs
+  identically in the browser and in Node.
 - `test/scoring.test.js` — unit tests for the scoring math, run with
-  `node test/scoring.test.js` (20 tests, no camera needed).
+  `node test/scoring.test.js` (25 tests, no camera needed).
 - `literature_research_on_the_app.docx` / `literature_citations_on_app.csv`
   — the literature review this version of the app is grounded in.
 
@@ -97,29 +101,77 @@ Grant camera permission when prompted. The pose model
 asked to step back until your whole body is visible before the routine
 starts — that's the new framing check, not a bug.
 
+## Clinical review pass (Aug 2026)
+
+A physiotherapist review of the working prototype (thank you, Danny) surfaced
+one structural problem worth fixing before anything else: the original
+six-movement battery mixed movements suited to a frail-elderly population
+(sit-to-stand, gait) with movements that could themselves be a fall risk for
+that same population (an unmodified single-leg balance test, a full
+bodyweight squat) — serving no single population well, and potentially
+unsafely. Three changes came out of that review:
+
+1. **One coherent default population.** The default routine is now scoped to
+   older-adult / falls-risk and general functional screening: 5x
+   sit-to-stand, arm raise, feet-together static balance, and walk-in-place.
+   Squat and single-leg balance (both sides) are still fully implemented and
+   scored, but moved behind an explicit **"Include advanced movements"**
+   checkbox on the capture page for fitter, younger, or post-surgical
+   patients where they're clinically appropriate — opt-in rather than
+   default. See `CORE_MOVEMENTS` / `ADVANCED_MOVEMENTS` /
+   `buildActiveRoutine()` in `js/capture.js`.
+2. **Feet-together balance is now the default stance**, not single-leg — a
+   safer, more clinically standard fall-risk test for a general/older-adult
+   population (closer to a Romberg/tandem-stance test). `createBalanceTracker`
+   in `js/scoring.js` takes a `stance` option (`"feet_together"` default,
+   `"single_leg"` for the advanced variant); the underlying sway computation
+   is identical either way, so the evidence tier doesn't change — only the
+   starting posture and clinical framing do.
+3. **Spoken instructions + tracking-interruption handling.** The framing
+   check asks patients to stand far enough back for full-body tracking,
+   which is often too far to read on-screen text — instructions are now
+   also spoken aloud (Web Speech API), with an on/off toggle. Separately,
+   real sessions aren't clean lab recordings (someone walks past, a pet
+   wanders into frame); `FlexionScoring.createDropoutMonitor()` watches
+   per-frame tracking quality during a step, pauses scoring while tracking
+   is lost rather than silently miscounting through it, and flags the
+   result (`tracking_interrupted`) if a step was affected — see
+   `js/capture.js`'s `renderLoop()` and `advanceStep()`.
+
+A known limitation not yet fixed in code: on some MacBooks, the camera
+appears to auto-frame on the face rather than the full body (likely macOS's
+Center Stage), making full-body framing difficult even at distance —
+`capture.html` now shows a setup tip suggesting Center Stage be turned off,
+but the app itself has no way to detect or disable an OS-level camera
+feature from the browser.
+
 ## How the scoring works (short version)
 
+- **Sit-to-stand** — *High confidence (reps & time only)*. A hip-height
+  state machine counts stand/sit cycles and times the first 5. Deliberately
+  does not report a knee angle for this movement — see "What changed"
+  above. Part of the default battery.
+- **Arm raise** — *Moderate confidence*. Angle at the shoulder between the
+  torso line and the upper arm (flexion/abduction only). Tracks max angle
+  reached per side and the L/R difference. Not validated for rotational or
+  multi-planar shoulder mobility. Part of the default battery.
+- **Static balance** — *Exploratory*. Hip-midpoint position sampled every
+  frame while holding a stance; total sway path length per second of hold
+  converts to a 0–100 stability score. Feet-together by default (part of
+  the default battery); single-leg, both sides, is available as an advanced
+  option. The least evidence-covered domain reviewed — treat as a trend
+  indicator, not an absolute measurement, regardless of stance.
+- **Walk in place** — *High confidence (cadence/step count)*, moderate for
+  step-height asymmetry. Counts vertical ankle oscillations per side to
+  get step count, cadence, and a left/right step-height asymmetry proxy.
+  Part of the default battery.
 - **Squat** — *High confidence*. Interior angle at the knee
   (hip–knee–ankle). ~180° standing, lower = deeper flexion. A state
   machine (top → descending → bottom → ascending → top) counts reps and
   captures the angle minimum per rep on each leg, plus trunk lean as a
   compensation signal. Near-static bottom-of-squat angle is the accuracy
-  profile the literature supports best.
-- **5x Sit-to-Stand** — *High confidence (reps & time only)*. A hip-height
-  state machine counts stand/sit cycles and times the first 5. Deliberately
-  does not report a knee angle for this movement — see "What changed"
-  above.
-- **Arm raise** — *Moderate confidence*. Angle at the shoulder between the
-  torso line and the upper arm (flexion/abduction only). Tracks max angle
-  reached per side and the L/R difference. Not validated for rotational or
-  multi-planar shoulder mobility.
-- **Balance** — *Exploratory*. Hip-midpoint position sampled every frame
-  while on one leg; total sway path length per second of hold converts to
-  a 0–100 stability score. The least evidence-covered domain reviewed —
-  treat as a trend indicator, not an absolute measurement.
-- **Walk in place** — *High confidence (cadence/step count)*, moderate for
-  step-height asymmetry. Counts vertical ankle oscillations per side to
-  get step count, cadence, and a left/right step-height asymmetry proxy.
+  profile the literature supports best. **Advanced/optional** — not part
+  of the default elderly/falls-risk battery.
 
 All of this runs from a single library, `js/scoring.js`, that takes plain
 landmark objects (`{x, y, visibility}`) — see `test/scoring.test.js` for

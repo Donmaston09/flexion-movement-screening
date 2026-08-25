@@ -23,10 +23,10 @@ const KEY_METRIC = {
 };
 
 const METRIC_LABEL = {
-  squat: "Avg squat depth (deg knee flexion)",
+  squat: "Avg squat depth (deg knee flexion) — advanced/optional movement",
   sit_to_stand: "5x Sit-to-Stand time (sec, lower is better)",
   arm_raise: "Avg max arm-raise ROM (deg)",
-  balance: "Balance stability score (0-100)",
+  balance: "Balance stability score (0-100) — feet-together by default, single-leg if advanced",
   walk_in_place: "Walk cadence (steps/min)",
 };
 
@@ -219,13 +219,8 @@ function seedSampleData() {
         evidence: evidence.arm_raise,
       },
       {
-        movement: "balance", stepKey: "balance_left", stepLabel: "Single-Leg Balance — Left",
+        movement: "balance", stance: "feet_together", stepKey: "balance_tandem", stepLabel: "Static Balance — Feet Together",
         holdDurationSec: 10, stabilityScore: round1(stability), flags: stability < 60 ? ["fall_risk_review"] : [],
-        evidence: evidence.balance,
-      },
-      {
-        movement: "balance", stepKey: "balance_right", stepLabel: "Single-Leg Balance — Right",
-        holdDurationSec: 10, stabilityScore: round1(stability + rand(-4, 4)), flags: [],
         evidence: evidence.balance,
       },
       {

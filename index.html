@@ -44,7 +44,7 @@
         <a href="dashboard.html" class="secondary">View Provider Dashboard</a>
       </div>
       <div class="stats-row">
-        <div class="stat"><strong>6</strong><span>movements screened per routine</span></div>
+        <div class="stat"><strong>4</strong><span>movements screened by default (+3 optional)</span></div>
         <div class="stat"><strong>20</strong><span>papers underpinning the evidence tiers</span></div>
         <div class="stat"><strong>0</strong><span>frames of video leave the device</span></div>
       </div>
@@ -56,6 +56,18 @@
       yet a finished clinical product. It is the vehicle for the pilot validation
       study described in the Technical Spec, run against real PT assessments before
       any clinical claim is made.
+    </section>
+
+    <section class="panel note landing-note">
+      <strong>Built around one population, not several at once:</strong>
+      following physiotherapist review, Flexion's default routine (5x
+      sit-to-stand, arm raise, feet-together static balance, walk in place) is
+      scoped specifically to older-adult / falls-risk and general functional
+      screening — a coherent, low-risk battery for that population, rather
+      than a mix that could itself introduce fall risk. A bodyweight squat and
+      single-leg balance test are available as an opt-in "advanced movements"
+      set on the capture page for fitter, younger, or post-surgical patients
+      where they're clinically appropriate.
     </section>
 
     <section id="evidence" class="evidence-section">
@@ -73,12 +85,14 @@
 
       <div class="evidence-grid">
         <div class="evidence-card evidence-high">
-          <span class="evidence-badge">High confidence</span>
+          <span class="evidence-badge">High confidence · Optional</span>
           <h3>Squat — knee flexion</h3>
           <p>Sagittal-plane knee flexion at the near-static bottom of a squat is the
             best-supported accuracy profile in the literature: mean error &lt;1.1°
             and limits of agreement &lt;5° against lab-based marker systems, even in
-            space-constrained clinical settings.</p>
+            space-constrained clinical settings. Part of the opt-in "advanced
+            movements" set — a full bodyweight squat isn't appropriate for every
+            patient by default.</p>
           <p class="evidence-citation">Ruder et al. 2026; Scataglini et al. 2024</p>
         </div>
 
@@ -115,10 +129,15 @@
 
         <div class="evidence-card evidence-exploratory">
           <span class="evidence-badge">Exploratory</span>
-          <h3>Single-leg balance</h3>
-          <p>The least evidence-covered domain reviewed for Flexion. Reported as a
+          <h3>Static balance</h3>
+          <p>The least evidence-covered domain reviewed for Flexion, regardless of
+            stance. The default routine uses a feet-together stance — a safer,
+            more clinically standard fall-risk test for a general/older-adult
+            population than single-leg balance, which is offered instead as an
+            opt-in "advanced" variant for fitter patients. Reported as a
             within-patient trend indicator, not an absolute clinical measurement,
-            until pilot-validated against a clinical balance assessment.</p>
+            until pilot-validated (e.g. against force-plate center-of-pressure
+            data).</p>
           <p class="evidence-citation">Flexion literature evidence review, 2026</p>
         </div>
 
@@ -140,8 +159,10 @@
         <div class="step">
           <span class="step-num">1</span>
           <h3>Patient films a guided routine</h3>
-          <p>Squat, 5x sit-to-stand, arm raise, single-leg balance (both sides), and
-            walk-in-place — six movements, one webcam, a few minutes.</p>
+          <p>5x sit-to-stand, arm raise, feet-together static balance, and
+            walk-in-place by default — one coherent, low-risk battery, one webcam,
+            a few minutes. Squat and single-leg balance are available as an
+            opt-in "advanced movements" set for fitter patients.</p>
         </div>
         <div class="step">
           <span class="step-num">2</span>
