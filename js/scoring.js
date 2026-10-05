@@ -92,8 +92,8 @@
       tier: "moderate",
       label: "Moderate confidence",
       note:
-        "Knee flexion at a controlled, near-static position (the bottom of a squat), filmed side-on in the sagittal plane, is the accuracy profile the literature supports best: RMSE <2.33° against lab-based marker systems. Flexion therefore asks for a side-on view; a front-on view under-estimates knee flexion and is not what the cited studies support. Rated Moderate rather than High because this has not been validated in Flexion's own setup (single consumer webcam, lite pose model, unsupervised placement). Left/right squat asymmetry is not reported, because the far leg is not reliably visible side-on.",
-      citation: "Ruder et al. 2026; Scataglini et al. 2024",
+        "Squat-specific evidence is limited. A deep-learning markerless system showed excellent agreement with a marker-based reference during an overhead squat (RMSE 2.33 to 6.25° across joints; Bae et al. 2024), and sagittal-plane knee kinematics at a controlled, near-static position are among the better-supported markerless outputs in gait studies. Those figures come from multi-camera or non-BlazePose systems, not from a single consumer webcam with Flexion's lite pose model; single-smartphone gait systems report errors of several degrees (Horsak et al. 2023). Flexion therefore asks for a side-on (sagittal) view; a front-on view under-estimates knee flexion. Rated Moderate rather than High because this has not been validated in Flexion's own setup (single consumer webcam, lite pose model, unsupervised placement). Left/right squat asymmetry is not reported, because the far leg is not reliably visible side-on.",
+      citation: "Bae et al. 2024; Horsak et al. 2023; Scataglini et al. 2024",
     },
     arm_raise: {
       tier: "moderate",

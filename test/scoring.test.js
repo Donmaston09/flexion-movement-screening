@@ -342,7 +342,10 @@ test("evidence tiers: squat, sit-to-stand and walk-in-place are Moderate; balanc
     assert.ok(!/High confidence/.test(S.EVIDENCE[k].label), `${k} label still says High`);
     assert.ok(!/<\s*1\.1/.test(S.EVIDENCE[k].note), `${k} note still quotes the old <1.1 deg figure`);
   });
-  assert.ok(/2\.33/.test(S.EVIDENCE.squat.note), "squat note should quote RMSE <2.33 deg");
+  assert.ok(/2\.33 to 6\.25/.test(S.EVIDENCE.squat.note), "squat note should quote the overhead-squat RMSE range");
+  assert.ok(!/<\s*2\.33/.test(S.EVIDENCE.squat.note), "squat note must not present RMSE <2.33 as squat evidence");
+  assert.ok(!/lab-based marker systems/.test(S.EVIDENCE.squat.note), "squat note must not attribute gait/stance accuracy to squatting");
+  assert.ok(/Bae et al\. 2024/.test(S.EVIDENCE.squat.citation), "squat citation should be the squat study");
 });
 
 test("squat tracker: side-on view with the far leg untracked still counts reps and does not invent asymmetry", () => {

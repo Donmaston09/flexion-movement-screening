@@ -36,8 +36,8 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
    Every score Flexion produces now carries a tier — High / Moderate /
    Exploratory — plus the specific finding and citation behind it. This
    isn't a marketing badge; it's `js/scoring.js` refusing to imply the same
-   confidence for a squat-depth reading (RMSE <2.33° side-on; see
-   `EVIDENCE.squat` for the citation) as for a balance-stability score (the least
+   confidence for a squat-depth reading (Moderate; squat-specific evidence is
+   limited, see `EVIDENCE.squat` for the citation) as for a balance-stability score (the least
    evidence-covered domain in the review). See `EVIDENCE` in
    `js/scoring.js`.
 2. **A new movement: the Five-Times-Sit-to-Stand test.** This is a real,
@@ -175,8 +175,9 @@ feature from the browser.
   (hip–knee–ankle). ~180° standing, lower = deeper flexion. A state
   machine (top → descending → bottom → ascending → top) counts reps and
   captures the angle minimum per rep on each leg, plus trunk lean as a
-  compensation signal. Near-static bottom-of-squat angle is the accuracy
-  profile the literature supports best. **Advanced/optional** — not part
+  compensation signal. Near-static bottom-of-squat angle is the best-supported
+  sagittal-plane profile, but squat-specific evidence is limited (one overhead-squat
+  study with a non-BlazePose system, RMSE 2.33–6.25°). **Advanced/optional** — not part
   of the default elderly/falls-risk battery.
 
 All of this runs from a single library, `js/scoring.js`, that takes plain
