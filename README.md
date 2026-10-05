@@ -1,5 +1,8 @@
 # Flexion — Remote Movement Screening Prototype
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23172878.svg)](https://doi.org/10.5281/zenodo.23172878)
+
+
 **Author:** Anthony Onoja, Ph.D. — School of Health Sciences, Faculty of
 Health and Medical Sciences, University of Surrey, United Kingdom.
 Contact: [a.onoja@surrey.ac.uk](mailto:a.onoja@surrey.ac.uk) ·
@@ -226,3 +229,9 @@ Released under the [MIT Licence](LICENSE). Flexion is a research prototype and
 is **not a validated or approved medical device**; it must not be used for
 diagnosis or treatment decisions. The software is provided "as is", without
 warranty of any kind.
+
+## Citing this software
+
+Archived on Zenodo. Cite all versions: [10.5281/zenodo.23172878](https://doi.org/10.5281/zenodo.23172878).
+This release (v0.2.0, tag `v0.2.0`): [10.5281/zenodo.23172879](https://doi.org/10.5281/zenodo.23172879).
+See `CITATION.cff` for machine-readable citation metadata.
