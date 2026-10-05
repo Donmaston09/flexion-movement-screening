@@ -126,10 +126,16 @@ const ADVANCED_MOVEMENTS = [
   {
     key: "squat",
     label: "Bodyweight Squats",
-    instruction: "Stand facing the camera, feet hip-width apart. Perform 5 slow squats.",
+    // Filmed SIDE-ON: the accuracy evidence behind the squat rating
+    // (EVIDENCE.squat) is for sagittal-plane knee flexion; a frontal view
+    // under-estimates knee flexion. The left side faces the camera so the
+    // near-side landmarks (and the left-side trunk-lean reading) are the
+    // ones tracked reliably.
+    instruction: "Turn side-on to the camera so your left side faces it, keeping your whole body in frame, feet hip-width apart. Perform 5 slow squats.",
+    view: "side",
     kind: "reps",
     target: 5,
-    makeTracker: () => FlexionScoring.createSquatTracker(),
+    makeTracker: () => FlexionScoring.createSquatTracker({ view: "side" }),
     isDone: (tracker) => tracker._state.reps.length >= 5,
     liveText: (tracker) => `Reps: ${tracker._state.reps.length} / 5  ·  Phase: ${tracker._state.phase}`,
   },
@@ -252,7 +258,10 @@ function renderLoop() {
     drawFrame(result);
 
     const lm = result.landmarks && result.landmarks[0];
-    const quality = FlexionScoring.computeFrameQuality(lm);
+    // Judge framing against the view the current step asks for (a
+    // side-on step is only expected to track the camera-facing side).
+    const activeStep = mode === "routine" ? ROUTINE[stepIndex] : null;
+    const quality = FlexionScoring.computeFrameQuality(lm, { view: activeStep && activeStep.view });
     updateTrackingQualityUI(quality);
 
     if (mode === "calibrating") {

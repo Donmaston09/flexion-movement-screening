@@ -89,10 +89,10 @@
   // (see the Technical Spec, Section 7).
   const EVIDENCE = {
     squat: {
-      tier: "high",
-      label: "High confidence",
+      tier: "moderate",
+      label: "Moderate confidence",
       note:
-        "Sagittal-plane knee flexion captured at a controlled, near-static position (the bottom of a squat) is the accuracy profile the literature supports best: mean error <1.1° and limits of agreement <5° against lab-based marker systems, even in space-constrained clinical settings.",
+        "Knee flexion at a controlled, near-static position (the bottom of a squat), filmed side-on in the sagittal plane, is the accuracy profile the literature supports best: RMSE <2.33° against lab-based marker systems. Flexion therefore asks for a side-on view; a front-on view under-estimates knee flexion and is not what the cited studies support. Rated Moderate rather than High because this has not been validated in Flexion's own setup (single consumer webcam, lite pose model, unsupervised placement). Left/right squat asymmetry is not reported, because the far leg is not reliably visible side-on.",
       citation: "Ruder et al. 2026; Scataglini et al. 2024",
     },
     arm_raise: {
@@ -110,17 +110,17 @@
       citation: "Flexion literature evidence review, 2026",
     },
     walk_in_place: {
-      tier: "high",
-      label: "High confidence (cadence & step count)",
+      tier: "moderate",
+      label: "Moderate confidence (cadence & step count)",
       note:
-        "Spatiotemporal gait parameters — step count, cadence, timing — are the best-validated markerless outputs in the literature, with inter-rater reliability and concurrent validity reaching good-to-excellent ICC (0.81–0.98). Step-height asymmetry is a secondary kinematic proxy and carries lower confidence.",
+        "Spatiotemporal gait parameters — step count, cadence, timing — are among the best-supported markerless outputs in laboratory gait studies, with inter-rater reliability and concurrent validity reaching good-to-excellent ICC (0.81–0.98). Flexion applies this to marching in place, using a simple ankle-height threshold from a single webcam, which has not been validated; it is therefore rated Moderate. Step-height asymmetry is a secondary kinematic proxy and carries lower confidence.",
       citation: "Scataglini et al. 2024",
     },
     sit_to_stand: {
-      tier: "high",
-      label: "High confidence (reps & time)",
+      tier: "moderate",
+      label: "Moderate confidence (reps & time)",
       note:
-        "Scored as repetitions and total time — the established Five-Times-Sit-to-Stand functional/fall-risk metric — rather than knee-angle depth. Transitional sit-to-stand joint angles showed wide limits of agreement (12–20°) even in studies where other markerless measures were reliable, so Flexion deliberately does not report STS joint angle.",
+        "Scored as repetitions and total time — the established Five-Times-Sit-to-Stand functional/fall-risk metric — rather than knee-angle depth. Transitional sit-to-stand joint angles showed wide limits of agreement (12–20°) even in studies where other markerless measures were reliable, so Flexion deliberately does not report STS joint angle. Rated Moderate: Flexion's automated rep counting and timing from hip height has not yet been validated against manual timing.",
       citation: "Ruder et al. 2026; Zischke et al. 2021",
     },
   };
@@ -142,15 +142,23 @@
     "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE",
   ].map((k) => LM[k]);
 
+  // Per-side landmark sets, used when a movement is filmed side-on (view
+  // "side"): only the camera-facing side is expected to be tracked
+  // reliably, so quality is judged on whichever side is better visible.
+  const REQUIRED_LEFT_SIDE = ["LEFT_SHOULDER", "LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE"].map((k) => LM[k]);
+  const REQUIRED_RIGHT_SIDE = ["RIGHT_SHOULDER", "RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE"].map((k) => LM[k]);
+
   function computeFrameQuality(lm, opts) {
-    const o = Object.assign({ minVisibility: 0.5 }, opts);
-    if (!lm) return { visibleCount: 0, totalRequired: REQUIRED_FOR_QUALITY.length, ratioPct: 0, tier: "no_pose" };
-    const visibleCount = REQUIRED_FOR_QUALITY.filter((idx) => visible(lm, idx, o.minVisibility)).length;
-    const ratio = visibleCount / REQUIRED_FOR_QUALITY.length;
+    const o = Object.assign({ minVisibility: 0.5, view: "front" }, opts);
+    const sets = o.view === "side" ? [REQUIRED_LEFT_SIDE, REQUIRED_RIGHT_SIDE] : [REQUIRED_FOR_QUALITY];
+    const totalRequired = sets[0].length;
+    if (!lm) return { visibleCount: 0, totalRequired, ratioPct: 0, tier: "no_pose" };
+    const visibleCount = Math.max(...sets.map((set) => set.filter((idx) => visible(lm, idx, o.minVisibility)).length));
+    const ratio = visibleCount / totalRequired;
     let tier = "poor";
     if (ratio >= 0.95) tier = "good";
     else if (ratio >= 0.75) tier = "fair";
-    return { visibleCount, totalRequired: REQUIRED_FOR_QUALITY.length, ratioPct: round1(ratio * 100), tier };
+    return { visibleCount, totalRequired, ratioPct: round1(ratio * 100), tier };
   }
 
   // ---------------------------------------------------------------------
@@ -220,12 +228,20 @@
   // We track a simple state machine to count reps and capture the angle
   // at the bottom of each rep on both sides plus trunk lean (compensation).
 
+  function minOrSet(current, value) {
+    return current == null ? value : Math.min(current, value);
+  }
+
   function createSquatTracker(opts) {
-    const o = Object.assign({ topAngle: 160, bottomAngle: 130, minVisibility: 0.5 }, opts);
+    // view: "side" (default) = filmed side-on, which is the view the cited
+    // sagittal-plane validation studies support. L/R asymmetry is not
+    // reported in that view (the far leg is occluded / poorly tracked).
+    // view: "front" keeps the legacy frontal behaviour incl. asymmetry.
+    const o = Object.assign({ topAngle: 160, bottomAngle: 130, minVisibility: 0.5, view: "side" }, opts);
     const state = {
       phase: "top", // top -> descending -> bottom -> ascending -> top
       reps: [],
-      currentMin: { left: 180, right: 180, trunkLean: 0 },
+      currentMin: { left: null, right: null, trunkLean: 0 },
       frames: 0,
     };
 
@@ -258,25 +274,29 @@
       // State machine on the driving (average) knee angle.
       if (state.phase === "top" && drivingAngle < o.topAngle) {
         state.phase = "descending";
-        state.currentMin = { left: leftAngle ?? 180, right: rightAngle ?? 180, trunkLean: trunkLean ?? 0 };
+        state.currentMin = { left: leftAngle, right: rightAngle, trunkLean: trunkLean ?? 0 };
       } else if (state.phase === "descending") {
-        if (leftAngle != null) state.currentMin.left = Math.min(state.currentMin.left, leftAngle);
-        if (rightAngle != null) state.currentMin.right = Math.min(state.currentMin.right, rightAngle);
+        if (leftAngle != null) state.currentMin.left = minOrSet(state.currentMin.left, leftAngle);
+        if (rightAngle != null) state.currentMin.right = minOrSet(state.currentMin.right, rightAngle);
         if (trunkLean != null) state.currentMin.trunkLean = Math.max(state.currentMin.trunkLean, trunkLean);
         if (drivingAngle < o.bottomAngle) state.phase = "bottom";
       } else if (state.phase === "bottom") {
-        if (leftAngle != null) state.currentMin.left = Math.min(state.currentMin.left, leftAngle);
-        if (rightAngle != null) state.currentMin.right = Math.min(state.currentMin.right, rightAngle);
+        if (leftAngle != null) state.currentMin.left = minOrSet(state.currentMin.left, leftAngle);
+        if (rightAngle != null) state.currentMin.right = minOrSet(state.currentMin.right, rightAngle);
         if (trunkLean != null) state.currentMin.trunkLean = Math.max(state.currentMin.trunkLean, trunkLean);
         if (drivingAngle > o.bottomAngle) state.phase = "ascending";
       } else if (state.phase === "ascending" && drivingAngle > o.topAngle) {
         state.phase = "top";
+        // A side that was never visible during the rep stays null (rather
+        // than being reported as 0 degrees of flexion).
+        const flexLeft = state.currentMin.left != null ? 180 - state.currentMin.left : null;
+        const flexRight = state.currentMin.right != null ? 180 - state.currentMin.right : null;
         state.reps.push({
           repIndex: state.reps.length + 1,
-          leftKneeFlexionDeg: round1(180 - state.currentMin.left),
-          rightKneeFlexionDeg: round1(180 - state.currentMin.right),
+          leftKneeFlexionDeg: round1(flexLeft),
+          rightKneeFlexionDeg: round1(flexRight),
           trunkLeanDeg: round1(state.currentMin.trunkLean),
-          asymmetryPct: round1(asymmetryPct(180 - state.currentMin.left, 180 - state.currentMin.right)),
+          asymmetryPct: o.view === "side" ? null : round1(asymmetryPct(flexLeft, flexRight)),
         });
       }
 
@@ -285,11 +305,16 @@
 
     function summarize(targetReps) {
       const reps = state.reps;
-      const depth = mean(reps.map((r) => Math.max(r.leftKneeFlexionDeg, r.rightKneeFlexionDeg)));
-      const asym = mean(reps.map((r) => r.asymmetryPct));
+      const depth = mean(
+        reps
+          .map((r) => Math.max(...[r.leftKneeFlexionDeg, r.rightKneeFlexionDeg].filter((v) => v != null)))
+          .filter(Number.isFinite)
+      );
+      const asym = mean(reps.map((r) => r.asymmetryPct).filter((v) => v != null));
       const trunk = mean(reps.map((r) => r.trunkLeanDeg));
       return {
         movement: "squat",
+        view: o.view,
         repsCompleted: reps.length,
         repsTarget: targetReps ?? null,
         reps,
@@ -388,8 +413,8 @@
   // Single-leg balance module
   // ---------------------------------------------------------------------
   // Uses the midpoint of the hips as a center-of-mass proxy while the
-  // patient stands on one leg. Sway = normalized horizontal displacement
-  // of that point across the hold. Lower sway = more stable.
+  // patient stands on one leg. Sway = normalized 2-D (x and y) path length
+  // of that point across the hold: 2-D (x and y) path length in normalised image units. Lower sway = more stable.
 
   function createBalanceTracker(opts) {
     // `stance` describes the starting posture the patient was instructed
@@ -435,9 +460,9 @@
         movement: "balance",
         stance: state.stance,
         holdDurationSec: round1(durationSec),
-        swayPathLength: round1(pathLength),
-        swayStdX: round1(swayStdX),
-        swayStdY: round1(swayStdY),
+        swayPathLength: roundTo(pathLength, 4),
+        swayStdX: roundTo(swayStdX, 4),
+        swayStdY: roundTo(swayStdY, 4),
         stabilityScore,
         flags: durationSec < 5 || stabilityScore < 60 ? ["fall_risk_review"] : [],
         evidence: EVIDENCE.balance,
@@ -475,7 +500,7 @@
         s.peak = Math.min(s.peak, y);
         if (y >= s.baseline - o.riseThreshold / 2) {
           s.phase = "down";
-          s.steps.push({ heightNorm: round1((s.baseline - s.peak) * 1000) / 1000, t });
+          s.steps.push({ heightNorm: roundTo(s.baseline - s.peak, 4), t });
         }
       }
     }
@@ -501,8 +526,8 @@
         leftSteps: state.left.steps.length,
         rightSteps: state.right.steps.length,
         cadenceStepsPerMin: cadenceSpm,
-        avgLeftStepHeight: leftHeights.length ? round1(mean(leftHeights)) : null,
-        avgRightStepHeight: rightHeights.length ? round1(mean(rightHeights)) : null,
+        avgLeftStepHeight: leftHeights.length ? roundTo(mean(leftHeights), 4) : null,
+        avgRightStepHeight: rightHeights.length ? roundTo(mean(rightHeights), 4) : null,
         stepHeightAsymmetryPct: round1(asymmetryPct(mean(leftHeights), mean(rightHeights))),
         flags: buildWalkFlags(mean(leftHeights), mean(rightHeights), totalSteps),
         evidence: EVIDENCE.walk_in_place,
@@ -599,6 +624,15 @@
   function round1(v) {
     if (v == null || Number.isNaN(v)) return null;
     return Math.round(v * 10) / 10;
+  }
+
+  // Round to `digits` decimal places. Used for sub-metrics expressed in
+  // normalised image units (fractions of frame width/height, typically
+  // 0.001-0.1), where round1() would collapse almost every value to 0.0.
+  function roundTo(v, digits) {
+    if (v == null || Number.isNaN(v)) return null;
+    const f = 10 ** digits;
+    return Math.round(v * f) / f;
   }
 
   return {

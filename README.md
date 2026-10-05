@@ -20,7 +20,7 @@ is built on.
 
 ## What changed in this pass
 
-A structured literature review (20 papers on telehealth MSK exams and
+A narrative (non-systematic) literature review (20 papers on telehealth MSK exams and
 markerless/single-camera motion capture) surfaced a specific, actionable
 finding: accuracy in this field is not uniform across movements or metrics.
 Spatiotemporal gait measures and sagittal-plane hip/knee kinematics are
@@ -33,8 +33,8 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
    Every score Flexion produces now carries a tier — High / Moderate /
    Exploratory — plus the specific finding and citation behind it. This
    isn't a marketing badge; it's `js/scoring.js` refusing to imply the same
-   confidence for a squat-depth reading (mean error <1.1°, per
-   Ruder et al. 2026) as for a balance-stability score (the least
+   confidence for a squat-depth reading (RMSE <2.33° side-on; see
+   `EVIDENCE.squat` for the citation) as for a balance-stability score (the least
    evidence-covered domain in the review). See `EVIDENCE` in
    `js/scoring.js`.
 2. **A new movement: the Five-Times-Sit-to-Stand test.** This is a real,
@@ -147,7 +147,7 @@ feature from the browser.
 
 ## How the scoring works (short version)
 
-- **Sit-to-stand** — *High confidence (reps & time only)*. A hip-height
+- **Sit-to-stand** — *Moderate confidence (reps & time only)*. A hip-height
   state machine counts stand/sit cycles and times the first 5. Deliberately
   does not report a knee angle for this movement — see "What changed"
   above. Part of the default battery.
@@ -161,11 +161,14 @@ feature from the browser.
   the default battery); single-leg, both sides, is available as an advanced
   option. The least evidence-covered domain reviewed — treat as a trend
   indicator, not an absolute measurement, regardless of stance.
-- **Walk in place** — *High confidence (cadence/step count)*, moderate for
+- **Walk in place** — *Moderate confidence (cadence/step count)*, lower for
   step-height asymmetry. Counts vertical ankle oscillations per side to
   get step count, cadence, and a left/right step-height asymmetry proxy.
   Part of the default battery.
-- **Squat** — *High confidence*. Interior angle at the knee
+- **Squat** — *Moderate confidence*, **filmed side-on** (left side toward
+  the camera): the supporting evidence is for sagittal-plane knee flexion, and a
+  front-on view under-estimates it. Left/right asymmetry is not reported from
+  the side-on view. Interior angle at the knee
   (hip–knee–ankle). ~180° standing, lower = deeper flexion. A state
   machine (top → descending → bottom → ascending → top) counts reps and
   captures the angle minimum per rep on each leg, plus trunk lean as a
@@ -216,3 +219,10 @@ deployed (e.g. to Render, as this project is), that's automatic.
 - Thresholds (rep detection angles, flag cutoffs, the sit-to-stand slow-time
   cutoff) are reasonable starting points, not clinically validated numbers.
   That validation is the explicit purpose of the pilot.
+
+## Licence
+
+Released under the [MIT Licence](LICENSE). Flexion is a research prototype and
+is **not a validated or approved medical device**; it must not be used for
+diagnosis or treatment decisions. The software is provided "as is", without
+warranty of any kind.

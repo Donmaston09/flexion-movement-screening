@@ -255,7 +255,7 @@ test("evidence: every scored movement has a citation and a tier", () => {
 test("evidence: is attached to each tracker's summarize() output", () => {
   const squat = S.createSquatTracker();
   squat.addFrame(landmarksForKneeAngle(180));
-  assert.strictEqual(squat.summarize().evidence.tier, "high");
+  assert.strictEqual(squat.summarize().evidence.tier, "moderate");
 
   const balance = S.createBalanceTracker();
   balance.addFrame({ [S.LM.LEFT_HIP]: { x: 0.5, y: 0.5, visibility: 1 }, [S.LM.RIGHT_HIP]: { x: 0.5, y: 0.5, visibility: 1 } }, 0);
@@ -307,7 +307,7 @@ test("sit-to-stand tracker: counts 5 reps and times them", () => {
   assert.strictEqual(summary.repsCompleted, 5, `expected 5 reps, got ${summary.repsCompleted}`);
   assert.ok(summary.totalTimeSec > 0, "expected a positive elapsed time");
   assert.strictEqual(summary.flags.includes("incomplete_reps"), false);
-  assert.strictEqual(summary.evidence.tier, "high");
+  assert.strictEqual(summary.evidence.tier, "moderate");
 });
 
 test("sit-to-stand tracker: flags incomplete_reps when fewer than 5 reps completed", () => {
@@ -328,6 +328,92 @@ test("sit-to-stand tracker: flags incomplete_reps when fewer than 5 reps complet
   assert.strictEqual(summary.repsCompleted, 1);
   assert.ok(summary.flags.includes("incomplete_reps"));
 });
+
+// ---------------------------------------------------------------------
+// Added after the post-review code fixes (evidence tiers, side-on squat,
+// sub-metric precision).
+test("evidence tiers: squat, sit-to-stand and walk-in-place are Moderate; balance Exploratory; arm raise Moderate", () => {
+  assert.strictEqual(S.getEvidence("squat").tier, "moderate");
+  assert.strictEqual(S.getEvidence("sit_to_stand").tier, "moderate");
+  assert.strictEqual(S.getEvidence("walk_in_place").tier, "moderate");
+  assert.strictEqual(S.getEvidence("balance").tier, "exploratory");
+  assert.strictEqual(S.getEvidence("arm_raise").tier, "moderate");
+  Object.keys(S.EVIDENCE).forEach((k) => {
+    assert.ok(!/High confidence/.test(S.EVIDENCE[k].label), `${k} label still says High`);
+    assert.ok(!/<\s*1\.1/.test(S.EVIDENCE[k].note), `${k} note still quotes the old <1.1 deg figure`);
+  });
+  assert.ok(/2\.33/.test(S.EVIDENCE.squat.note), "squat note should quote RMSE <2.33 deg");
+});
+
+test("squat tracker: side-on view with the far leg untracked still counts reps and does not invent asymmetry", () => {
+  const tracker = S.createSquatTracker(); // default view = side
+  const oneCycle = [180, 150, 120, 95, 90, 95, 120, 150, 180];
+  oneCycle.concat(oneCycle).forEach((a) => {
+    const lm = landmarksForKneeAngle(a);
+    // right (far) leg not tracked
+    [S.LM.RIGHT_HIP, S.LM.RIGHT_KNEE, S.LM.RIGHT_ANKLE].forEach((i) => { lm[i] = { ...lm[i], visibility: 0.1 }; });
+    tracker.addFrame(lm);
+  });
+  const summary = tracker.summarize(5);
+  assert.strictEqual(summary.view, "side");
+  assert.strictEqual(summary.repsCompleted, 2);
+  assert.ok(summary.avgDepthDeg > 85 && summary.avgDepthDeg < 95, `depth out of range: ${summary.avgDepthDeg}`);
+  assert.strictEqual(summary.reps[0].rightKneeFlexionDeg, null, "untracked side must be null, not 0");
+  assert.strictEqual(summary.avgAsymmetryPct, null);
+  assert.strictEqual(summary.flags.includes("left_right_asymmetry"), false);
+});
+
+test("squat tracker: legacy front view still reports left/right asymmetry", () => {
+  const tracker = S.createSquatTracker({ view: "front" });
+  [180, 150, 120, 95, 90, 95, 120, 150, 180].forEach((a) => tracker.addFrame(landmarksForKneeAngle(a)));
+  const summary = tracker.summarize(1);
+  assert.strictEqual(summary.repsCompleted, 1);
+  assert.strictEqual(summary.avgAsymmetryPct, 0);
+});
+
+test("frame quality: side view is judged on the better-visible side only", () => {
+  const lm = new Array(33).fill(0).map(() => ({ x: 0.5, y: 0.5, visibility: 1 }));
+  [S.LM.RIGHT_SHOULDER, S.LM.RIGHT_HIP, S.LM.RIGHT_KNEE, S.LM.RIGHT_ANKLE].forEach((i) => { lm[i] = { x: 0.5, y: 0.5, visibility: 0.1 }; });
+  const front = S.computeFrameQuality(lm);
+  const side = S.computeFrameQuality(lm, { view: "side" });
+  assert.notStrictEqual(front.tier, "good", "front view should not be good with a whole side missing");
+  assert.strictEqual(side.tier, "good");
+  assert.strictEqual(side.totalRequired, 4);
+  assert.strictEqual(S.computeFrameQuality(null, { view: "side" }).tier, "no_pose");
+});
+
+test("balance tracker: sway sub-metrics keep useful precision (not rounded to 0.1)", () => {
+  const tracker = S.createBalanceTracker();
+  let t = 0;
+  for (let i = 0; i < 100; i++) {
+    t += 100;
+    const sway = Math.sin(i / 2) * 0.004; // ~0.4% of frame width
+    const lm = { [S.LM.LEFT_HIP]: { x: 0.5 + sway, y: 0.5, visibility: 1 }, [S.LM.RIGHT_HIP]: { x: 0.5 + sway, y: 0.5, visibility: 1 } };
+    tracker.addFrame(lm, t);
+  }
+  const summary = tracker.summarize();
+  assert.ok(summary.swayStdX > 0 && summary.swayStdX < 0.01, `swayStdX should be a small non-zero value, got ${summary.swayStdX}`);
+  assert.ok(summary.swayPathLength > 0.1, `swayPathLength should be a non-zero path length, got ${summary.swayPathLength}`);
+  assert.ok(Math.abs(summary.swayStdX * 1e4 - Math.round(summary.swayStdX * 1e4)) < 1e-6, "swayStdX should be rounded to 4 decimal places");
+});
+
+test("walk tracker: average step height keeps useful precision (not rounded to 0.1)", () => {
+  const tracker = S.createWalkTracker();
+  let t = 0;
+  for (let cycle = 0; cycle < 6; cycle++) {
+    [0.9, 0.88, 0.86, 0.84, 0.86, 0.88, 0.9, 0.9].forEach((y) => {
+      t += 50;
+      const lm = new Array(33).fill(0).map(() => ({ x: 0.5, y: 0.5, visibility: 1 }));
+      lm[S.LM.LEFT_ANKLE] = { x: 0.45, y, visibility: 1 };
+      lm[S.LM.RIGHT_ANKLE] = { x: 0.55, y: 0.9, visibility: 1 };
+      tracker.addFrame(lm, t);
+    });
+  }
+  const summary = tracker.summarize();
+  assert.ok(summary.leftSteps >= 3, `expected left steps, got ${summary.leftSteps}`);
+  assert.ok(summary.avgLeftStepHeight > 0.02 && summary.avgLeftStepHeight < 0.1, `step height should be a small non-zero fraction, got ${summary.avgLeftStepHeight}`);
+});
+
 
 console.log(`\n${passed} test(s) passed.`);
 if (process.exitCode) {

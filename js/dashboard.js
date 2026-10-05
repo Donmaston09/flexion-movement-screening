@@ -178,7 +178,7 @@ seedBtn.addEventListener("click", () => {
 
 // Generates 6 weekly sessions of synthetic-but-plausible data for a demo
 // chronic-low-back-pain patient, showing gradual improvement in squat
-// depth and a mild persistent L/R asymmetry flag — the kind of trend a
+// depth (squat L/R asymmetry is not reported from the side-on view) — the kind of trend a
 // provider would want to see between visits.
 function seedSampleData() {
   const existing = loadReports();
@@ -202,8 +202,8 @@ function seedSampleData() {
       {
         movement: "squat", stepKey: "squat", stepLabel: "Bodyweight Squats",
         repsCompleted: 5, repsTarget: 5,
-        avgDepthDeg: round1(squatDepth), avgAsymmetryPct: round1(asym), avgTrunkLeanDeg: round1(18 - progress * 6),
-        flags: asym > 15 ? ["left_right_asymmetry"] : [],
+        view: "side", avgDepthDeg: round1(squatDepth), avgAsymmetryPct: null, avgTrunkLeanDeg: round1(18 - progress * 6),
+        flags: [],
         evidence: evidence.squat,
       },
       {
