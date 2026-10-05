@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Flexion: evidence-graded remote musculoskeletal movement screening (research prototype)"
+abstract: >-
+  Browser-based research prototype for remote musculoskeletal movement
+  screening. On-device pose estimation (MediaPipe) scores a guided movement
+  routine, and every score carries a literature-derived evidence tier
+  (High / Moderate / Exploratory). Not a validated or approved medical
+  device; not for clinical use.
+authors:
+  - family-names: Onoja
+    given-names: Anthony
+    affiliation: "School of Health Sciences, University of Surrey, United Kingdom"
+    email: a.onoja@surrey.ac.uk
+repository-code: "https://github.com/Donmaston09/flexion-movement-screening"
+url: "https://flexion-movement-screening.onrender.com"
+license: MIT
+version: 0.2.0
+date-released: "2026-10-05"
+keywords:
+  - markerless motion capture
+  - pose estimation
+  - telehealth
+  - musculoskeletal screening
+  - evidence grading
+  - MediaPipe
