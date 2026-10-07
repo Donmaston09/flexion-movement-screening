@@ -24,6 +24,31 @@ const patientNameInput = document.getElementById("patientName");
 const trackingQualityEl = document.getElementById("trackingQuality");
 const includeAdvancedInput = document.getElementById("includeAdvanced");
 const audioToggleBtn = document.getElementById("audioToggleBtn");
+const walkingAidSelect = document.getElementById("walkingAid");
+
+function currentWalkingAid() {
+  return FlexionScoring.normaliseWalkingAid(walkingAidSelect ? walkingAidSelect.value : "none");
+}
+
+// Demonstrations: videos are loaded only when a panel is opened, so the
+// page stays light. If a file is missing the panel says so rather than
+// showing a broken player. (Videos are meant to be filmed with older
+// adults; none ship with the prototype yet.)
+document.querySelectorAll("#demoPanel details[data-demo]").forEach((el) => {
+  el.addEventListener("toggle", () => {
+    if (!el.open) return;
+    const vid = el.querySelector("video");
+    const missing = el.querySelector(".demo-missing");
+    if (!vid || vid.dataset.loaded) return;
+    vid.dataset.loaded = "1";
+    vid.addEventListener("error", () => {
+      vid.hidden = true;
+      if (missing) missing.hidden = false;
+    });
+    vid.preload = "metadata"; // "none" would never try the file, so a missing file would not be noticed
+    vid.src = `assets/demos/${el.dataset.demo}.mp4`;
+  });
+});
 
 // ---------------------------------------------------------------------
 // Spoken instructions
@@ -81,6 +106,7 @@ const CORE_MOVEMENTS = [
     key: "sit_to_stand",
     label: "5x Sit-to-Stand",
     instruction: "Sit in a stable chair, arms crossed if safe. Stand fully upright and sit back down 5 times, as briskly as is safe.",
+    aidInstruction: "Keep your walking aid within reach. If you need your hands to push up, do it the way you normally would.",
     kind: "reps",
     target: 5,
     makeTracker: () => FlexionScoring.createSitToStandTracker(),
@@ -91,6 +117,7 @@ const CORE_MOVEMENTS = [
     key: "arm_raise",
     label: "Arm Raises",
     instruction: "Raise both arms overhead and lower, 3 times, at a comfortable pace.",
+    aidInstruction: "Sit down for this movement if you cannot stand safely without your walking aid.",
     kind: "duration",
     seconds: 15,
     makeTracker: () => FlexionScoring.createArmRaiseTracker(),
@@ -101,6 +128,7 @@ const CORE_MOVEMENTS = [
     key: "balance_tandem",
     label: "Static Balance — Feet Together",
     instruction: "Stand with your feet together, arms relaxed at your sides. Hold as steady as you can. Stay near a wall or sturdy chair in case you need to steady yourself.",
+    aidInstruction: "Only do this with someone beside you, and keep a sturdy surface to hold. Keep your walking aid within reach.",
     kind: "duration",
     seconds: 10,
     makeTracker: () => FlexionScoring.createBalanceTracker({ stance: "feet_together" }),
@@ -110,6 +138,7 @@ const CORE_MOVEMENTS = [
     key: "walk_in_place",
     label: "Walk in Place",
     instruction: "March in place, lifting your knees, for 15 seconds.",
+    aidInstruction: "Stand next to a sturdy surface you can hold. Keep your walking aid within reach.",
     kind: "duration",
     seconds: 15,
     makeTracker: () => FlexionScoring.createWalkTracker(),
@@ -332,12 +361,18 @@ function runCalibrationFrame(quality, nowMs) {
   }
 }
 
+function stepInstruction(step) {
+  const aid = currentWalkingAid();
+  return aid !== "none" && step.aidInstruction ? `${step.instruction} ${step.aidInstruction}` : step.instruction;
+}
+
 function advanceStep() {
   if (stepIndex >= 0 && currentTracker) {
     const finishedStep = ROUTINE[stepIndex];
     const summary = currentTracker.summarize();
     summary.stepKey = finishedStep.key; // disambiguates e.g. balance_left vs balance_right
     summary.stepLabel = finishedStep.label;
+    summary.walkingAid = currentWalkingAid();
     // Fold the tracking-dropout verdict for this step into its flags so a
     // provider sees "tracking interrupted" alongside any scoring flags,
     // rather than a clean-looking number that was actually captured
@@ -358,9 +393,9 @@ function advanceStep() {
   currentTracker = step.makeTracker();
   currentDropout = FlexionScoring.createDropoutMonitor();
   stepStartTs = performance.now();
-  const msg = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${step.instruction}`;
+  const msg = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${stepInstruction(step)}`;
   instructionEl.textContent = msg;
-  speak(`${step.label}. ${step.instruction}`);
+  speak(`${step.label}. ${stepInstruction(step)}`);
 }
 
 function finishRoutine() {
@@ -371,8 +406,29 @@ function finishRoutine() {
   renderSummary();
 }
 
+function escapeText(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderPlainSummary() {
+  const plain = FlexionScoring.plainLanguageSummary(results, { walkingAid: currentWalkingAid() });
+  const flagged = plain.flaggedItems.length
+    ? `<ul>${plain.flaggedItems.map((f) => `<li><strong>${escapeText(f.movement)}:</strong> ${escapeText(f.text)}</li>`).join("")}</ul>`
+    : "";
+  const aid = plain.aidNote ? `<p class="aid-note">${escapeText(plain.aidNote)}</p>` : "";
+  const card = document.createElement("div");
+  card.className = "plain-summary";
+  card.innerHTML = `<h3>Summary in plain language</h3>
+    <p>${escapeText(plain.headline)}</p>${flagged}${aid}
+    <p><strong>What to do next</strong></p>
+    <ul>${plain.nextSteps.map((n) => `<li>${escapeText(n)}</li>`).join("")}</ul>
+    <p><em>${escapeText(plain.disclaimer)}</em></p>`;
+  summaryEl.appendChild(card);
+}
+
 function renderSummary() {
   summaryEl.innerHTML = "";
+  renderPlainSummary();
   results.forEach((r) => {
     const card = document.createElement("div");
     card.className = "score-card";
@@ -413,6 +469,11 @@ function buildReport() {
     reportId: `flexion-${Date.now()}`,
     patientName,
     capturedAt: new Date().toISOString(),
+    sessionContext: {
+      walkingAid: currentWalkingAid(),
+      intendedUse: "movement-based screening aid for clinician review; not diagnostic",
+    },
+    plainLanguageSummary: FlexionScoring.plainLanguageSummary(results, { walkingAid: currentWalkingAid() }),
     routine: results,
     // Mock FHIR-style observations so a real integration can map 1:1
     // onto Observation resources pushed to the patient's record. The

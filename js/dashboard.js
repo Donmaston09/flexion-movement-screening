@@ -63,6 +63,7 @@ function flattenSessions(reports) {
         capturedAt: report.capturedAt,
         stepKey: r.stepKey,
         stepLabel: r.stepLabel,
+        walkingAid: r.walkingAid || (report.sessionContext && report.sessionContext.walkingAid) || null,
         flags: r.flags || [],
         raw: r,
       });
@@ -95,7 +96,7 @@ function renderTable(rows) {
             return `<tr class="${flagged ? "flagged" : ""}">
               <td>${new Date(row.capturedAt).toLocaleString()}</td>
               <td>${escapeHtml(row.patientName)}</td>
-              <td>${row.stepLabel || row.stepKey}</td>
+              <td>${row.stepLabel || row.stepKey}${row.walkingAid && row.walkingAid !== "none" ? ` <span class="aid-tag">· walking aid: ${escapeHtml(row.walkingAid)}</span>` : ""}</td>
               <td>${metric ?? "—"}</td>
               <td>${confidencePill}</td>
               <td>${flagged ? row.flags.join(", ").replace(/_/g, " ") : "—"}</td>

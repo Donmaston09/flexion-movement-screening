@@ -621,6 +621,82 @@
     return flags;
   }
 
+  // ---------------------------------------------------------------------
+  // Session context: walking aids and plain-language summary
+  // ---------------------------------------------------------------------
+  // Added after group feedback (Oct 2026): older adults often already use
+  // a walking aid, and the people who see the result are not only
+  // clinicians but also the older adult and their carer.
+
+  const WALKING_AIDS = ["none", "stick", "frame", "other"];
+
+  // Missing/empty -> "none"; anything unrecognised -> "other" (so it is
+  // still recorded as "an aid was involved" rather than silently dropped).
+  function normaliseWalkingAid(value) {
+    if (value == null || value === "") return "none";
+    const v = String(value).toLowerCase();
+    return WALKING_AIDS.indexOf(v) >= 0 ? v : "other";
+  }
+
+  // Shown with the results when an aid was used. A stick or frame can hide
+  // or be mistaken for part of a leg, and aided performance is not
+  // comparable with unaided performance; Flexion does not model either.
+  function walkingAidNote(aid) {
+    const a = normaliseWalkingAid(aid);
+    if (a === "none") return null;
+    return "This session was recorded with a walking aid (" + a + "). The aid can hide or be mistaken for part of a leg by the camera, and results with an aid should only be compared with other sessions recorded with the same aid. Flexion does not adjust for walking aids.";
+  }
+
+  const PLAIN_FLAG_TEXT = {
+    incomplete_reps: "Not all of the movements were completed.",
+    slow_sit_to_stand_time: "The chair stands took longer than a clinician would usually expect.",
+    fall_risk_review: "Balance looked less steady than expected, or could not be held for the full time.",
+    reduced_rom: "One or both arms did not reach as high as expected.",
+    left_right_asymmetry: "One side moved differently from the other.",
+    gait_asymmetry: "One side stepped differently from the other.",
+    low_step_count: "Fewer steps were counted than expected.",
+    limited_depth: "The squat was shallower than expected.",
+    excess_trunk_lean: "You leaned forward more than expected during the squat.",
+    tracking_interrupted: "The camera lost sight of you during this step, so the result may not be reliable. It can be repeated.",
+  };
+
+  // Builds a short, number-free summary for the person who did the
+  // movements (and their carer). It never says the person is well: a
+  // result with no flags is not evidence that nothing is wrong, and the
+  // prototype is not validated. It also never shows evidence tiers or
+  // citations; those stay in the clinician-facing report.
+  function plainLanguageSummary(results, context) {
+    const ctx = context || {};
+    const list = Array.isArray(results) ? results : [];
+    const completed = [];
+    const flaggedItems = [];
+    list.forEach(function (r) {
+      const label = String(r.stepLabel || r.movement || "movement").replace(/_/g, " ");
+      completed.push(label);
+      (r.flags || []).forEach(function (f) {
+        flaggedItems.push({
+          movement: label,
+          text: PLAIN_FLAG_TEXT[f] || "Something in this step was flagged for a clinician to look at.",
+        });
+      });
+    });
+    const headline = flaggedItems.length
+      ? "Some parts of this session were flagged for a clinician to look at."
+      : "No parts of this session were flagged, but this does not mean that nothing is wrong.";
+    return {
+      headline: headline,
+      completed: completed,
+      flaggedItems: flaggedItems,
+      aidNote: walkingAidNote(ctx.walkingAid),
+      nextSteps: [
+        "Share these results with the GP, physiotherapist or clinical team who asked you to do them. They can decide whether anything more is needed.",
+        "Contact your GP or physiotherapist sooner if you have had a fall, feel unsteady, or had pain during any movement.",
+        "Stop any movement that feels unsafe or painful.",
+      ],
+      disclaimer: "Flexion is a research prototype. It is not a diagnosis and it cannot tell you that you are well. It has not been validated for clinical use.",
+    };
+  }
+
   function round1(v) {
     if (v == null || Number.isNaN(v)) return null;
     return Math.round(v * 10) / 10;
@@ -648,5 +724,9 @@
     createBalanceTracker,
     createWalkTracker,
     createSitToStandTracker,
+    WALKING_AIDS,
+    normaliseWalkingAid,
+    walkingAidNote,
+    plainLanguageSummary,
   };
 });

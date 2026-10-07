@@ -38,6 +38,15 @@
         <button id="startBtn" class="primary">Start Routine</button>
         <button id="audioToggleBtn" type="button" aria-pressed="true">🔊 Audio instructions: On</button>
       </div>
+      <label class="aid-select" for="walkingAid">
+        Walking aid used today:
+        <select id="walkingAid">
+          <option value="none">None</option>
+          <option value="stick">Walking stick</option>
+          <option value="frame">Frame / rollator</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
       <label class="advanced-toggle">
         <input id="includeAdvanced" type="checkbox" />
         Include advanced movements (bodyweight squat, single-leg balance) —
@@ -74,6 +83,33 @@
         "advanced movements" option above adds a full bodyweight squat and
         single-leg balance testing, which are more appropriate for fitter or
         younger patients and are opt-in rather than default for that reason.
+      </div>
+
+      <div class="panel note">
+        <strong>What this is, and is not:</strong> Flexion is a movement-based
+        screening aid that gives a clinician something to review. It does not
+        diagnose, and it is not a rehabilitation programme. It cannot measure
+        everything used to assess frailty (for example grip strength), so it
+        does not replace a clinical frailty assessment. Procedure-specific
+        movement sets for post-operative rehabilitation (for example after a
+        knee or hip replacement) are not included yet.
+      </div>
+
+      <div class="panel" id="demoPanel">
+        <h2>Demonstrations</h2>
+        <p class="demo-help">Watch how each movement is done before you start.
+          Demonstrations are meant to be filmed with older adults performing
+          each movement.</p>
+        <details data-demo="sit_to_stand"><summary>5x Sit-to-Stand</summary>
+          <video controls playsinline preload="none"></video><p class="demo-missing" hidden>Demonstration video not available yet.</p></details>
+        <details data-demo="arm_raise"><summary>Arm raises</summary>
+          <video controls playsinline preload="none"></video><p class="demo-missing" hidden>Demonstration video not available yet.</p></details>
+        <details data-demo="balance_tandem"><summary>Static balance, feet together</summary>
+          <video controls playsinline preload="none"></video><p class="demo-missing" hidden>Demonstration video not available yet.</p></details>
+        <details data-demo="walk_in_place"><summary>Walk in place</summary>
+          <video controls playsinline preload="none"></video><p class="demo-missing" hidden>Demonstration video not available yet.</p></details>
+        <details data-demo="squat"><summary>Bodyweight squat (advanced, side-on)</summary>
+          <video controls playsinline preload="none"></video><p class="demo-missing" hidden>Demonstration video not available yet.</p></details>
       </div>
 
       <div class="panel">

@@ -452,3 +452,16 @@ canvas#trendChart { background: var(--panel); border-radius: 12px; border: 1px s
 
   table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* Walking-aid selector, demonstrations, plain-language summary */
+.aid-select { display: block; margin: 8px 0; font-size: 13px; color: var(--text-dim); }
+.aid-select select { margin-left: 6px; }
+#demoPanel details { margin: 6px 0; }
+#demoPanel summary { cursor: pointer; font-size: 13px; }
+#demoPanel video { width: 100%; max-width: 420px; margin-top: 6px; border-radius: 6px; }
+.demo-help, .demo-missing { font-size: 12px; color: var(--text-dim); }
+.plain-summary { border: 1px solid var(--border, #999); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--panel-2); }
+.plain-summary h3 { margin: 0 0 6px; font-size: 15px; }
+.plain-summary p, .plain-summary li { font-size: 13px; }
+.aid-note { font-size: 12px; color: var(--warn); margin-top: 6px; }
+.aid-tag { font-size: 11px; color: var(--text-dim); }

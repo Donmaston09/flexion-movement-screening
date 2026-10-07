@@ -417,6 +417,36 @@ test("walk tracker: average step height keeps useful precision (not rounded to 0
   assert.ok(summary.avgLeftStepHeight > 0.02 && summary.avgLeftStepHeight < 0.1, `step height should be a small non-zero fraction, got ${summary.avgLeftStepHeight}`);
 });
 
+test("walking aid: values are normalised and a note is only produced when an aid is used", () => {
+  assert.strictEqual(S.normaliseWalkingAid(undefined), "none");
+  assert.strictEqual(S.normaliseWalkingAid(""), "none");
+  assert.strictEqual(S.normaliseWalkingAid("Stick"), "stick");
+  assert.strictEqual(S.normaliseWalkingAid("crutches"), "other");
+  assert.strictEqual(S.walkingAidNote("none"), null);
+  assert.ok(/walking aid \(frame\)/.test(S.walkingAidNote("frame")));
+});
+
+test("plain-language summary: no numbers or tiers, never says the person is well, always points to a clinician", () => {
+  const results = [
+    { stepLabel: "5x Sit-to-Stand", movement: "sit_to_stand", flags: ["slow_sit_to_stand_time"], evidence: S.EVIDENCE.sit_to_stand },
+    { stepLabel: "Walk in Place", movement: "walk_in_place", flags: [], evidence: S.EVIDENCE.walk_in_place },
+    { stepLabel: "Static Balance", movement: "balance", flags: ["tracking_interrupted", "some_new_flag"], evidence: S.EVIDENCE.balance },
+  ];
+  const p = S.plainLanguageSummary(results, { walkingAid: "stick" });
+  assert.strictEqual(p.completed.length, 3);
+  assert.strictEqual(p.flaggedItems.length, 3);
+  assert.ok(p.flaggedItems.some((f) => /camera lost sight/.test(f.text)));
+  assert.ok(p.flaggedItems.some((f) => /flagged for a clinician/.test(f.text)), "unknown flags get a generic clinician-review message");
+  assert.ok(/walking aid \(stick\)/.test(p.aidNote));
+  const text = JSON.stringify(p);
+  assert.ok(!/Moderate|Exploratory|High confidence|et al\./.test(text), "no tiers or citations in the plain-language summary");
+  assert.ok(!/\d/.test(p.headline + p.flaggedItems.map((f) => f.text).join(" ")), "no numbers in headline or flag text");
+  assert.ok(/GP or physiotherapist/.test(p.nextSteps.join(" ")));
+  assert.ok(/not a diagnosis/.test(p.disclaimer));
+  const clean = S.plainLanguageSummary([{ stepLabel: "Arm Raises", flags: [] }], {});
+  assert.ok(/does not mean that nothing is wrong/.test(clean.headline));
+  assert.strictEqual(clean.aidNote, null);
+});
 
 console.log(`\n${passed} test(s) passed.`);
 if (process.exitCode) {

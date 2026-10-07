@@ -205,6 +205,36 @@ install review, no download, just a bookmark with an icon. Camera access
 still requires the page to be served over HTTPS (or `localhost`); once
 deployed (e.g. to Render, as this project is), that's automatic.
 
+## Feedback from a research-group presentation (Oct 2026)
+
+Colleagues in the School of Health Sciences raised several points after a
+presentation of the prototype. What changed in the code:
+
+- **Intended use is stated.** Flexion is a movement-based screening aid for
+  clinician review (primary use case: falls-risk and frailty screening in
+  older adults in the community). It is not diagnostic and not a
+  rehabilitation programme. Post-operative rehabilitation (for example after
+  a knee or hip replacement) would need its own movement set and is not
+  included. Grip strength, a common frailty indicator, cannot be measured by
+  a camera. See the notes on `index.html` and `capture.html`.
+- **Walking aids.** The capture page asks whether a walking stick, frame or
+  other aid is used. The choice adds safety wording to the balance,
+  walk-in-place, sit-to-stand and arm-raise instructions, is recorded on each
+  step and in `sessionContext`, is shown on the provider dashboard, and adds a
+  caution to the summary. Flexion does not adjust scoring for walking aids.
+- **Demonstrations.** The capture page has a Demonstrations panel that looks
+  for `assets/demos/<movement>.mp4` (`sit_to_stand`, `arm_raise`,
+  `balance_tandem`, `walk_in_place`, `squat`). No videos are included yet;
+  the panel says so. They are meant to be filmed with older adults.
+- **Plain-language summary.** The end-of-session summary now starts with a
+  short, number-free summary for the person and their carer
+  (`FlexionScoring.plainLanguageSummary`). It never says the person is well,
+  shows no tiers or citations, and points to the GP or physiotherapist.
+
+Not done yet: co-design with older adults, carers and clinicians, a
+procedure-specific movement set for post-operative rehabilitation, and a
+structured comparison with rehabilitation apps already in use.
+
 ## Known limitations (by design, for a prototype)
 
 - Single camera, 2D landmarks only — no depth, so angles are estimates
