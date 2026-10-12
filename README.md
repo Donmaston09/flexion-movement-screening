@@ -205,6 +205,21 @@ install review, no download, just a bookmark with an icon. Camera access
 still requires the page to be served over HTTPS (or `localhost`); once
 deployed (e.g. to Render, as this project is), that's automatic.
 
+## How-to video
+
+A narrated walkthrough of the home movement routine (about 3 min 45 s, with
+captions) is on the **How to use** page (`how-to.html`) and is linked from the
+home page and the patient capture page. The files are in `assets/demos/`:
+
+- `how-to-use-flexion.mp4`: the video (H.264/AAC, 1280x720).
+- `how-to-use-flexion.vtt`: English captions, loaded by the page.
+- `how-to-use-flexion-poster.jpg`: poster image.
+
+The narration is a synthetic voice, and the movement pictures are simple
+illustrations rather than recordings of real people. The per-movement
+demonstration slots (`assets/demos/<movement>.mp4`) described below are
+separate and are still intended to be filmed with older adults.
+
 ## Feedback from a research-group presentation (Oct 2026)
 
 Colleagues in the School of Health Sciences raised several points after a

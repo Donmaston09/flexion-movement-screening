@@ -465,3 +465,22 @@ canvas#trendChart { background: var(--panel); border-radius: 12px; border: 1px s
 .plain-summary p, .plain-summary li { font-size: 13px; }
 .aid-note { font-size: 12px; color: var(--warn); margin-top: 6px; }
 .aid-tag { font-size: 11px; color: var(--text-dim); }
+
+/* ---- How-to video page ---- */
+.howto { max-width: 1000px; margin: 0 auto; padding: 24px 20px 48px; }
+.howto h1 { margin: 0 0 8px; font-size: 30px; }
+.howto-lede { color: var(--text-dim); margin: 0 0 18px; line-height: 1.5; }
+.howto-player video { width: 100%; max-height: 70vh; background: #000; border-radius: 12px; border: 1px solid var(--border); display: block; }
+.howto-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+.howto-chapters { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.howto-chapters button { width: 100%; text-align: left; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 8px; padding: 7px 10px; font-size: 14px; cursor: pointer; }
+.howto-chapters button:hover, .howto-chapters button:focus-visible { border-color: var(--accent); outline: none; }
+.howto-chapters .ct { display: inline-block; min-width: 40px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.howto-btn { display: inline-block; background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #0b1220; font-weight: 700; padding: 11px 20px; border-radius: 10px; text-decoration: none; }
+.howto-transcript summary { cursor: pointer; font-weight: 700; }
+.howto-transcript h3 { font-size: 15px; margin: 18px 0 4px; color: var(--accent); }
+.howto-transcript p { margin: 0; line-height: 1.55; color: var(--text); font-size: 14px; }
+.howto-link { margin: 6px 0 12px; font-size: 14px; }
+.howto a:not(.howto-btn), .howto-link a, .hero-howto a { color: var(--accent); font-weight: 700; }
+.hero-howto { text-align: center; margin: -20px 0 28px; font-size: 16px; }
+@media (max-width: 720px) { .howto-cols { grid-template-columns: 1fr; } }

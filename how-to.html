@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flexion — How to use the app</title>
+  <meta name="author" content="Anthony Onoja, Ph.D., School of Health Sciences, University of Surrey" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="assets/favicon-32.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">Flexion<span class="brand-dot">.</span></div>
+    <div class="topbar-sub">How to use the app</div>
+    <nav class="mainnav">
+      <a href="index.html">Home</a>
+      <a href="how-to.html" class="active">How to use</a>
+      <a href="capture.html">Patient Capture</a>
+      <a href="dashboard.html">Provider Dashboard</a>
+    </nav>
+  </header>
+
+  <main class="howto">
+    <h1>How to use Flexion</h1>
+    <p class="howto-lede">A narrated walkthrough of the home movement routine, about four minutes long.
+      Captions are on by default in most players; use the captions button to turn them off.
+      The movement pictures are illustrations, not recordings of real people.</p>
+
+    <div class="howto-player">
+      <video id="howtoVideo" controls playsinline preload="metadata"
+        poster="assets/demos/how-to-use-flexion-poster.jpg">
+        <source src="assets/demos/how-to-use-flexion.mp4" type="video/mp4" />
+        <track kind="captions" src="assets/demos/how-to-use-flexion.vtt" srclang="en" label="English" default />
+        Your browser cannot play this video. <a href="assets/demos/how-to-use-flexion.mp4">Download the video</a>.
+      </video>
+    </div>
+
+    <div class="howto-cols">
+      <section class="panel">
+        <h2>Jump to</h2>
+        <ul class="howto-chapters"><li><button type="button" data-t="0.0"><span class="ct">0:00</span> Welcome</button></li><li><button type="button" data-t="13.4"><span class="ct">0:13</span> Before you start</button></li><li><button type="button" data-t="39.3"><span class="ct">0:39</span> Open the app</button></li><li><button type="button" data-t="54.5"><span class="ct">0:54</span> Set up</button></li><li><button type="button" data-t="82.6"><span class="ct">1:22</span> Follow the prompts</button></li><li><button type="button" data-t="99.8"><span class="ct">1:39</span> 1. Sit-to-stand</button></li><li><button type="button" data-t="114.0"><span class="ct">1:54</span> 2. Arm raises</button></li><li><button type="button" data-t="125.1"><span class="ct">2:05</span> 3. Feet-together balance</button></li><li><button type="button" data-t="141.9"><span class="ct">2:21</span> 4. Walk in place</button></li><li><button type="button" data-t="150.4"><span class="ct">2:30</span> If tracking is lost</button></li><li><button type="button" data-t="166.8"><span class="ct">2:46</span> Your summary</button></li><li><button type="button" data-t="192.4"><span class="ct">3:12</span> For clinicians: dashboard</button></li><li><button type="button" data-t="210.5"><span class="ct">3:30</span> Closing</button></li></ul>
+      </section>
+      <section class="panel">
+        <h2>Ready to try it?</h2>
+        <p><a class="howto-btn" href="capture.html">Open Patient Capture</a></p>
+        <p class="demo-help"><strong>Safety first.</strong> Do the movements next to a sturdy surface, stop at any
+          time if something feels unsafe or painful, and have someone with you if you can.
+          Flexion is a research prototype. It does not diagnose, it cannot tell you that you are well,
+          and it has not been validated for clinical use. No video leaves your device.</p>
+        <p class="demo-help"><a href="assets/demos/how-to-use-flexion.mp4" download>Download the video (MP4)</a> ·
+          <a href="assets/demos/how-to-use-flexion.vtt" download>Captions (VTT)</a></p>
+      </section>
+    </div>
+
+    <details class="panel howto-transcript">
+      <summary>Read the full transcript</summary>
+      <h3>Welcome</h3><p>Welcome to Flexion, a research prototype that helps a clinician review how someone moves, using only the camera on a laptop or tablet. This short guide shows you how to complete the routine.</p><h3>Before you start</h3><p>Before you begin, set up a safe space. You will need a laptop or tablet with a camera, a stable chair, and enough clear room to step back so that your whole body, from shoulders to ankles, fits in the picture. If you can, have someone with you, and keep any walking aid within reach. If you are using a MacBook, turn off Center Stage in Control Center, because it can zoom in on your face and crop out the rest of you.</p><h3>Open the app</h3><p>Open the Flexion website and choose Try the Patient Capture Demo, or Patient Capture in the menu at the top. Nothing needs to be installed, and no video is uploaded. All of the analysis happens inside your own browser.</p><h3>Set up</h3><p>On the capture page, you can type a name. This is for the demo only. Use the walking aid menu to say whether you use a stick, a frame, or another aid today, so that the instructions and the results can take it into account. Leave the advanced movements box unticked unless a clinician has asked for them. They are meant for fitter or younger people. When you are ready, press Start Routine, and choose Allow when your browser asks to use the camera.</p><h3>Follow the prompts</h3><p>The app then reads each instruction aloud and shows it on screen, with a count of which movement you are on. There are four movements in the default routine. Step back until your whole body is visible. If the app cannot see you, it will ask you to step back into the frame.</p><h3>1. Sit-to-stand</h3><p>First, sit in a stable chair, with your arms crossed if that is safe. Stand fully upright and sit back down five times, as briskly as is safe. If you need your hands to push up, do it the way you normally would.</p><h3>2. Arm raises</h3><p>Second, raise both arms overhead and lower them, three times, at a comfortable pace. If you cannot stand safely without your walking aid, sit down for this one.</p><h3>3. Feet-together balance</h3><p>Third, stand with your feet together and your arms relaxed at your sides. Hold as steady as you can for ten seconds. Stay near a wall or a sturdy chair in case you need to steady yourself. If you use a walking aid, only do this one with someone beside you.</p><h3>4. Walk in place</h3><p>Fourth, march on the spot, lifting your knees, for fifteen seconds. Stand next to a sturdy surface that you can hold.</p><h3>If tracking is lost</h3><p>If the app loses sight of you part way through, it will say tracking lost and ask you to step back into frame. Check that your whole body is visible and that the room is well lit, then carry on. Stop at any time if a movement feels unsafe or painful.</p><h3>Your summary</h3><p>At the end you will see a summary in plain language. It tells you which movements were completed, and whether anything was flagged for a clinician to look at. It is not a diagnosis, and it cannot tell you that you are well. Share the results with the GP, physiotherapist or clinical team who asked you to do them. Contact them sooner if you have had a fall, feel unsteady, or had pain during any movement.</p><h3>For clinicians: dashboard</h3><p>Clinicians can open the Provider Dashboard to review saved sessions. Each result shows a key metric, an evidence tier, moderate or exploratory, and any flags. The sessions shown here are sample data, and in this prototype the data stays in the browser on that device.</p><h3>Closing</h3><p>That is the whole routine. Flexion is a research prototype. It is not a medical device, and it has not been validated for clinical use. Thank you for watching.</p>
+    </details>
+  </main>
+
+  <script>
+    (function () {
+      var v = document.getElementById("howtoVideo");
+      document.querySelectorAll(".howto-chapters button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          v.currentTime = parseFloat(b.dataset.t);
+          v.play().catch(function () {});
+          v.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>

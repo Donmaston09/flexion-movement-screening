@@ -1,0 +1,218 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:06.068
+Welcome to Flexion, a research prototype that helps a clinician review how someone moves,
+
+2
+00:00:06.068 --> 00:00:08.820
+using only the camera on a laptop or tablet.
+
+3
+00:00:09.270 --> 00:00:12.129
+This short guide shows you how to complete the routine.
+
+4
+00:00:13.879 --> 00:00:16.268
+Before you begin, set up a safe space.
+
+5
+00:00:16.718 --> 00:00:20.198
+You will need a laptop or tablet with a camera, a stable chair,
+
+6
+00:00:20.198 --> 00:00:24.893
+and enough clear room to step back so that your whole body, from shoulders to ankles,
+
+7
+00:00:24.893 --> 00:00:25.998
+fits in the picture.
+
+8
+00:00:26.448 --> 00:00:30.245
+If you can, have someone with you, and keep any walking aid within reach.
+
+9
+00:00:30.695 --> 00:00:34.458
+If you are using a MacBook, turn off Center Stage in Control Center,
+
+10
+00:00:34.458 --> 00:00:38.055
+because it can zoom in on your face and crop out the rest of you.
+
+11
+00:00:39.805 --> 00:00:43.564
+Open the Flexion website and choose Try the Patient Capture Demo,
+
+12
+00:00:43.564 --> 00:00:45.992
+or Patient Capture in the menu at the top.
+
+13
+00:00:46.442 --> 00:00:49.949
+Nothing needs to be installed, and no video is uploaded.
+
+14
+00:00:49.949 --> 00:00:53.205
+All of the analysis happens inside your own browser.
+
+15
+00:00:54.955 --> 00:00:59.008
+On the capture page, you can type a name. This is for the demo only.
+
+16
+00:00:59.458 --> 00:01:04.468
+Use the walking aid menu to say whether you use a stick, a frame, or another aid today,
+
+17
+00:01:04.468 --> 00:01:08.269
+so that the instructions and the results can take it into account.
+
+18
+00:01:08.719 --> 00:01:13.288
+Leave the advanced movements box unticked unless a clinician has asked for them.
+
+19
+00:01:13.288 --> 00:01:15.801
+They are meant for fitter or younger people.
+
+20
+00:01:16.251 --> 00:01:21.329
+When you are ready, press Start Routine, and choose Allow when your browser asks to use the camera.
+
+21
+00:01:23.079 --> 00:01:26.630
+The app then reads each instruction aloud and shows it on screen,
+
+22
+00:01:26.630 --> 00:01:28.924
+with a count of which movement you are on.
+
+23
+00:01:29.374 --> 00:01:31.955
+There are four movements in the default routine.
+
+24
+00:01:32.405 --> 00:01:36.204
+Step back until your whole body is visible. If the app cannot see you,
+
+25
+00:01:36.204 --> 00:01:38.592
+it will ask you to step back into the frame.
+
+26
+00:01:40.342 --> 00:01:44.246
+First, sit in a stable chair, with your arms crossed if that is safe.
+
+27
+00:01:44.696 --> 00:01:49.091
+Stand fully upright and sit back down five times, as briskly as is safe.
+
+28
+00:01:49.541 --> 00:01:52.783
+If you need your hands to push up, do it the way you normally would.
+
+29
+00:01:54.533 --> 00:01:59.333
+Second, raise both arms overhead and lower them, three times, at a comfortable pace.
+
+30
+00:01:59.783 --> 00:02:03.858
+If you cannot stand safely without your walking aid, sit down for this one.
+
+31
+00:02:05.608 --> 00:02:09.765
+Third, stand with your feet together and your arms relaxed at your sides.
+
+32
+00:02:09.765 --> 00:02:12.157
+Hold as steady as you can for ten seconds.
+
+33
+00:02:12.607 --> 00:02:16.533
+Stay near a wall or a sturdy chair in case you need to steady yourself.
+
+34
+00:02:16.983 --> 00:02:20.609
+If you use a walking aid, only do this one with someone beside you.
+
+35
+00:02:22.359 --> 00:02:26.050
+Fourth, march on the spot, lifting your knees, for fifteen seconds.
+
+36
+00:02:26.500 --> 00:02:29.145
+Stand next to a sturdy surface that you can hold.
+
+37
+00:02:30.895 --> 00:02:33.425
+If the app loses sight of you part way through,
+
+38
+00:02:33.425 --> 00:02:36.762
+it will say tracking lost and ask you to step back into frame.
+
+39
+00:02:37.212 --> 00:02:41.713
+Check that your whole body is visible and that the room is well lit, then carry on.
+
+40
+00:02:42.163 --> 00:02:45.513
+Stop at any time if a movement feels unsafe or painful.
+
+41
+00:02:47.263 --> 00:02:50.036
+At the end you will see a summary in plain language.
+
+42
+00:02:50.486 --> 00:02:52.769
+It tells you which movements were completed,
+
+43
+00:02:52.769 --> 00:02:55.883
+and whether anything was flagged for a clinician to look at.
+
+44
+00:02:56.333 --> 00:02:59.917
+It is not a diagnosis, and it cannot tell you that you are well.
+
+45
+00:03:00.367 --> 00:03:05.724
+Share the results with the GP, physiotherapist or clinical team who asked you to do them.
+
+46
+00:03:05.724 --> 00:03:11.141
+Contact them sooner if you have had a fall, feel unsteady, or had pain during any movement.
+
+47
+00:03:12.891 --> 00:03:16.731
+Clinicians can open the Provider Dashboard to review saved sessions.
+
+48
+00:03:17.181 --> 00:03:22.493
+Each result shows a key metric, an evidence tier, moderate or exploratory, and any flags.
+
+49
+00:03:22.943 --> 00:03:25.303
+The sessions shown here are sample data,
+
+50
+00:03:25.303 --> 00:03:29.257
+and in this prototype the data stays in the browser on that device.
+
+51
+00:03:31.007 --> 00:03:32.778
+That is the whole routine.
+
+52
+00:03:33.228 --> 00:03:36.936
+Flexion is a research prototype. It is not a medical device,
+
+53
+00:03:36.936 --> 00:03:39.841
+and it has not been validated for clinical use.
+
+54
+00:03:40.291 --> 00:03:41.742
+Thank you for watching.
+
