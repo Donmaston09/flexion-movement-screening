@@ -448,6 +448,254 @@ test("plain-language summary: no numbers or tiers, never says the person is well
   assert.strictEqual(clean.aidNote, null);
 });
 
+// ---------------------------------------------------------------------
+// People in view, identity lock, and the space / set-up check.
+// Landmarks are synthesised: these tests show the logic behaves as designed
+// on controlled input. They do not show how the real pose model behaves
+// with two real people; that is what the device test protocol is for.
+
+// A full-body pose centred at (cx, hipY), torso length `torso` (image units).
+function personPose(cx, hipY, torso, opts) {
+  const o = Object.assign({ visibility: 1 }, opts || {});
+  const lm = new Array(33).fill(0).map(() => ({ x: cx, y: hipY, visibility: o.visibility }));
+  const half = torso * 0.45;
+  const shoulderY = hipY - torso;
+  lm[0] = { x: cx, y: shoulderY - torso * 0.35, visibility: o.visibility }; // nose
+  lm[S.LM.LEFT_SHOULDER] = { x: cx - half, y: shoulderY, visibility: o.visibility };
+  lm[S.LM.RIGHT_SHOULDER] = { x: cx + half, y: shoulderY, visibility: o.visibility };
+  lm[S.LM.LEFT_HIP] = { x: cx - half * 0.7, y: hipY, visibility: o.visibility };
+  lm[S.LM.RIGHT_HIP] = { x: cx + half * 0.7, y: hipY, visibility: o.visibility };
+  lm[S.LM.LEFT_KNEE] = { x: cx - half * 0.7, y: hipY + torso * 0.9, visibility: o.visibility };
+  lm[S.LM.RIGHT_KNEE] = { x: cx + half * 0.7, y: hipY + torso * 0.9, visibility: o.visibility };
+  lm[S.LM.LEFT_ANKLE] = { x: cx - half * 0.7, y: hipY + torso * 1.8, visibility: o.visibility };
+  lm[S.LM.RIGHT_ANKLE] = { x: cx + half * 0.7, y: hipY + torso * 1.8, visibility: o.visibility };
+  return lm;
+}
+
+test("person anchor: needs a visible shoulder and a visible hip", () => {
+  assert.strictEqual(S.personAnchor(null), null);
+  const full = personPose(0.5, 0.5, 0.2);
+  const a = S.personAnchor(full);
+  assert.ok(a && Math.abs(a.x - 0.5) < 1e-6 && a.scale > 0.15);
+  const noHips = personPose(0.5, 0.5, 0.2);
+  noHips[S.LM.LEFT_HIP].visibility = 0;
+  noHips[S.LM.RIGHT_HIP].visibility = 0;
+  assert.strictEqual(S.personAnchor(noHips), null);
+});
+
+test("person tracker: locks onto a single person; two people at set-up => cannot lock", () => {
+  const t = S.createPersonTracker();
+  const r1 = t.update([personPose(0.5, 0.5, 0.2)], 0);
+  assert.strictEqual(r1.status, "single");
+  assert.ok(r1.lm);
+  const t2 = S.createPersonTracker();
+  const r2 = t2.update([personPose(0.3, 0.5, 0.2), personPose(0.7, 0.5, 0.2)], 0);
+  assert.strictEqual(r2.status, "multiple_unlocked");
+  assert.strictEqual(r2.lm, null);
+  assert.strictEqual(r2.peopleCount, 2);
+  const r3 = S.createPersonTracker().update([], 0);
+  assert.strictEqual(r3.status, "no_person");
+});
+
+test("person tracker: a helper standing beside the patient does not take over; the second person is recorded", () => {
+  const t = S.createPersonTracker();
+  const patient = personPose(0.35, 0.5, 0.2);
+  t.update([patient], 0);
+  t.resetStats();
+  let ts = 0;
+  for (let i = 0; i < 60; i++) {
+    ts += 33;
+    const p = personPose(0.35 + 0.002 * Math.sin(i / 5), 0.5, 0.2);
+    const helper = personPose(0.75, 0.52, 0.21);
+    // The model happens to list the helper first.
+    const r = t.update([helper, p], ts);
+    assert.strictEqual(r.status, "locked_others");
+    assert.strictEqual(r.lm, p, "must return the patient's landmarks, not the helper's");
+    assert.strictEqual(r.lockedIndex, 1);
+  }
+  const sum = t.summary();
+  assert.strictEqual(sum.maxPeopleInView, 2);
+  assert.ok(sum.secondPersonInView);
+  assert.ok(!sum.identityUncertain);
+  assert.deepStrictEqual(S.peopleFlags(sum), ["second_person_in_view"]);
+});
+
+test("person tracker: if the patient leaves and only the helper remains, the helper is NOT scored (the original silent-switch bug)", () => {
+  const t = S.createPersonTracker();
+  t.update([personPose(0.3, 0.5, 0.2)], 0);
+  t.resetStats();
+  let ts = 0;
+  let sawHelperScored = false;
+  let lostFrames = 0;
+  for (let i = 0; i < 60; i++) {
+    ts += 33;
+    const r = t.update([personPose(0.8, 0.5, 0.2)], ts); // only the helper, far from where the patient was
+    if (r.lm) sawHelperScored = true;
+    else lostFrames++;
+  }
+  assert.strictEqual(sawHelperScored, false);
+  assert.strictEqual(lostFrames, 60);
+  const sum = t.summary();
+  assert.ok(sum.identityUncertain, "a sustained stretch of not knowing who is who is flagged");
+  assert.ok(S.peopleFlags(sum).includes("identity_uncertain"));
+});
+
+test("person tracker: helper stepping into the patient's space => ambiguous, scoring withheld; patient then re-acquired", () => {
+  const t = S.createPersonTracker();
+  t.update([personPose(0.5, 0.5, 0.2)], 0);
+  let ts = 0;
+  const r1 = t.update([personPose(0.5, 0.5, 0.2), personPose(0.55, 0.5, 0.2)], (ts += 33));
+  assert.strictEqual(r1.status, "ambiguous");
+  assert.strictEqual(r1.lm, null);
+  const r2 = t.update([personPose(0.5, 0.5, 0.2), personPose(0.9, 0.5, 0.2)], (ts += 33));
+  assert.strictEqual(r2.status, "locked_others");
+  assert.ok(r2.lm);
+});
+
+test("person tracker: a sit-to-stand rise (fast vertical hip movement) keeps the lock", () => {
+  const t = S.createPersonTracker();
+  let ts = 0;
+  t.update([personPose(0.5, 0.7, 0.2)], ts);
+  // Hips rise 0.2 (one torso length) over 1 s at ~30 fps.
+  for (let i = 1; i <= 30; i++) {
+    ts += 33;
+    const r = t.update([personPose(0.5, 0.7 - (0.2 * i) / 30, 0.2)], ts);
+    assert.strictEqual(r.status, "single", `lost the patient during the rise at frame ${i}`);
+  }
+});
+
+test("person tracker: a very different body size is not accepted as the same person", () => {
+  const t = S.createPersonTracker();
+  t.update([personPose(0.5, 0.5, 0.2)], 0);
+  const r = t.update([personPose(0.5, 0.5, 0.08)], 33);
+  assert.strictEqual(r.lm, null);
+});
+
+test("person tracker: 'pause' policy withholds scoring while anyone else is in view but keeps the lock", () => {
+  const t = S.createPersonTracker({ policy: "pause" });
+  t.update([personPose(0.3, 0.5, 0.2)], 0);
+  const r = t.update([personPose(0.3, 0.5, 0.2), personPose(0.8, 0.5, 0.2)], 33);
+  assert.strictEqual(r.status, "others_present");
+  assert.strictEqual(r.lm, null);
+  const r2 = t.update([personPose(0.3, 0.5, 0.2)], 66);
+  assert.strictEqual(r2.status, "single");
+  assert.ok(r2.lm);
+  t.setPolicy("flag");
+  const r3 = t.update([personPose(0.3, 0.5, 0.2), personPose(0.8, 0.5, 0.2)], 99);
+  assert.strictEqual(r3.status, "locked_others");
+});
+
+test("person tracker: end to end, a helper doing sit-to-stands is not counted for a still patient", () => {
+  // Patient stands still on the left. Helper on the right does 5 stand/sit
+  // cycles. The model lists the helper first. Naively using poses[0] counts
+  // the helper's reps; using the locked person does not.
+  const naive = S.createSitToStandTracker();
+  const locked = S.createSitToStandTracker();
+  const t = S.createPersonTracker();
+  t.update([personPose(0.3, 0.6, 0.2)], 0);
+  let ts = 0;
+  const hipYs = [];
+  for (let i = 0; i < 10; i++) hipYs.push(0.7);
+  for (let rep = 0; rep < 5; rep++) [0.55, 0.5, 0.55, 0.7, 0.7].forEach((y) => hipYs.push(y));
+  hipYs.forEach((hy) => {
+    ts += 300;
+    const helper = personPose(0.75, hy, 0.2);
+    const patient = personPose(0.3, 0.6, 0.2);
+    const poses = [helper, patient];
+    naive.addFrame(poses[0], ts);
+    const r = t.update(poses, ts);
+    locked.addFrame(r.lm, ts);
+  });
+  assert.strictEqual(naive.summarize().repsCompleted, 5, "sanity check: the helper's movement would have been counted");
+  assert.strictEqual(locked.summarize().repsCompleted, 0, "locked tracking ignores the helper");
+});
+
+test("framing diagnosis: whole body in frame => no space problem", () => {
+  const d = S.diagnoseFraming(personPose(0.5, 0.45, 0.17));
+  assert.strictEqual(d.needsMoreSpace, false);
+  assert.deepStrictEqual(d.reasons, []);
+});
+
+test("framing diagnosis: ankles beyond the bottom of the frame => feet_cut_off, needs more space", () => {
+  const lm = personPose(0.5, 0.62, 0.22);
+  lm[S.LM.LEFT_ANKLE].visibility = 0.1;
+  lm[S.LM.RIGHT_ANKLE].visibility = 0.1;
+  const d = S.diagnoseFraming(lm);
+  assert.ok(d.reasons.includes("feet_cut_off"));
+  assert.strictEqual(d.needsMoreSpace, true);
+  const lm2 = personPose(0.5, 0.62, 0.22);
+  lm2[S.LM.LEFT_ANKLE].y = 0.995;
+  lm2[S.LM.RIGHT_ANKLE].y = 0.995;
+  assert.ok(S.diagnoseFraming(lm2).reasons.includes("feet_cut_off"));
+});
+
+test("framing diagnosis: very small figure => too_far (a tracking problem, not a space problem)", () => {
+  const d = S.diagnoseFraming(personPose(0.5, 0.5, 0.06));
+  assert.ok(d.reasons.includes("too_far"));
+  assert.strictEqual(d.needsMoreSpace, false);
+});
+
+test("set-up monitor: sustained 'cannot fit the body in' => fails with not_enough_space, and says why", () => {
+  const m = S.createSetupMonitor({ timeoutMs: 30000, hintAfterMs: 10000 });
+  const cut = personPose(0.5, 0.62, 0.22);
+  cut[S.LM.LEFT_ANKLE].visibility = 0.1;
+  cut[S.LM.RIGHT_ANKLE].visibility = 0.1;
+  const tier = S.computeFrameQuality(cut).tier;
+  assert.strictEqual(tier, "fair", "with both ankles lost the old quality tier alone would still let set-up pass");
+  const framing = S.diagnoseFraming(cut);
+  let ts = 0;
+  let st;
+  for (; ts <= 31000; ts += 100) {
+    m.record(tier, framing, "single", ts);
+    st = m.status(ts);
+    if (ts < 9000) assert.strictEqual(st.failed, false);
+  }
+  assert.strictEqual(st.shouldHint, true);
+  assert.strictEqual(st.failed, true);
+  assert.strictEqual(st.failureReason, "not_enough_space");
+  assert.ok(m.diagnostics().notEnoughSpaceMs > 29000);
+  assert.ok(S.describeFailure("not_enough_space").patient.length > 20);
+});
+
+test("set-up monitor: someone who gets framed correctly quickly never times out; two people => multiple_people", () => {
+  const ok = S.createSetupMonitor();
+  const good = personPose(0.5, 0.45, 0.17);
+  const goodTier = S.computeFrameQuality(good).tier;
+  assert.strictEqual(goodTier, "good");
+  for (let ts = 0; ts <= 5000; ts += 100) ok.record(goodTier, S.diagnoseFraming(good), "single", ts);
+  assert.strictEqual(ok.status(5000).failed, false);
+  assert.strictEqual(ok.status(5000).shouldHint, false);
+
+  const two = S.createSetupMonitor({ timeoutMs: 5000 });
+  for (let ts = 0; ts <= 6000; ts += 100) two.record("good", S.diagnoseFraming(good), "multiple_unlocked", ts);
+  const st = two.status(6000);
+  assert.strictEqual(st.failed, true);
+  assert.strictEqual(st.failureReason, "multiple_people");
+
+  const none = S.createSetupMonitor({ timeoutMs: 5000 });
+  for (let ts = 0; ts <= 6000; ts += 100) none.record("no_pose", S.diagnoseFraming(null), "no_person", ts);
+  assert.strictEqual(none.status(6000).failureReason, "no_person_detected");
+});
+
+test("plain-language summary: an incomplete session explains why and does not read as a result", () => {
+  const p = S.plainLanguageSummary([], { failureReason: "not_enough_space" });
+  assert.strictEqual(p.incomplete, true);
+  assert.ok(/could not be completed/.test(p.headline));
+  assert.ok(/room|space/.test(p.headline));
+  assert.ok(/could not be completed/.test(p.nextSteps.join(" ")));
+  assert.strictEqual(S.plainLanguageSummary([], {}).incomplete, false);
+});
+
+test("timing summary: median, 95th percentile and max; empty input is safe", () => {
+  const s = S.summariseTimings([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  assert.strictEqual(s.n, 10);
+  assert.strictEqual(s.medianMs, 60);
+  assert.strictEqual(s.p95Ms, 100);
+  assert.strictEqual(s.maxMs, 100);
+  assert.strictEqual(S.summariseTimings([]).medianMs, null);
+  assert.strictEqual(S.summariseTimings([NaN, "x", 5]).n, 1);
+});
+
 console.log(`\n${passed} test(s) passed.`);
 if (process.exitCode) {
   console.error("Some tests FAILED.");

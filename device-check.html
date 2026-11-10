@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flexion — Device check</title>
+  <meta name="author" content="Anthony Onoja, Ph.D., School of Health Sciences, University of Surrey" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="assets/favicon-32.png" type="image/png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .dc-wrap { max-width: 920px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+    .dc-video { position: relative; width: 100%; max-width: 480px; background: #000; border-radius: 8px; overflow: hidden; }
+    .dc-video video, .dc-video canvas { width: 100%; display: block; transform: scaleX(-1); }
+    .dc-video canvas { position: absolute; inset: 0; height: 100%; }
+    .dc-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    .dc-row label { font-size: 13px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px; }
+    .dc-row input, .dc-row select, .dc-row textarea { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: inherit; }
+    table.dc { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.dc th, table.dc td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.dc td:first-child { color: var(--text-dim); width: 40%; }
+    pre.dc-json { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">Flexion<span class="brand-dot">.</span></div>
+    <div class="topbar-sub">Device check (for testers)</div>
+    <nav class="mainnav">
+      <a href="index.html">Home</a>
+      <a href="capture.html">Patient Capture</a>
+      <a href="device-check.html" class="active">Device check</a>
+    </nav>
+  </header>
+
+  <main class="dc-wrap">
+    <div class="panel note">
+      <strong>What this page is.</strong> It runs the same pose model as Flexion
+      for a short fixed period and records how it behaves on <em>this</em> device:
+      model start-up, GPU or CPU, camera resolution, speed, how often a person
+      and a whole body are found, and whether a second person or too little
+      space is picked up. It does not score any movements, upload anything, or
+      store any video, images or landmark coordinates. Use it with the device
+      test protocol, then copy or download the results.
+    </div>
+
+    <div class="panel">
+      <h2>1. Run a check</h2>
+      <div class="dc-row">
+        <label>Tester initials / ID
+          <input id="tester" type="text" placeholder="e.g. AO" autocomplete="off" />
+        </label>
+        <label>Device name (as you would describe it)
+          <input id="deviceName" type="text" placeholder="e.g. iPhone 13, Safari" autocomplete="off" />
+        </label>
+        <label>Scenario
+          <select id="scenario">
+            <option value="S1 baseline: one person, whole body in view">S1 baseline: one person, whole body in view</option>
+            <option value="S2 helper beside the person">S2 helper beside the person</option>
+            <option value="S3 person leaves, helper remains">S3 person leaves, helper remains</option>
+            <option value="S4 limited space: cannot step back">S4 limited space: cannot step back</option>
+            <option value="S5 low light">S5 low light</option>
+            <option value="S6 bright window behind the person">S6 bright window behind the person</option>
+            <option value="S7 portrait orientation">S7 portrait orientation</option>
+            <option value="S8 landscape orientation">S8 landscape orientation</option>
+            <option value="Other (describe in notes)">Other (describe in notes)</option>
+          </select>
+        </label>
+        <label>Run length
+          <select id="duration">
+            <option value="20">20 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="10">10 seconds</option>
+          </select>
+        </label>
+      </div>
+      <div class="dc-row">
+        <label style="flex: 1 1 100%;">Notes (room size, lighting, what the people did, anything odd)
+          <textarea id="notes" rows="2"></textarea>
+        </label>
+      </div>
+      <div class="controls">
+        <button id="runBtn" class="primary">Start check</button>
+        <button id="speechBtn" type="button">Test spoken instruction</button>
+      </div>
+      <p id="dcStatus" class="status">Loading pose model...</p>
+      <div class="dc-video">
+        <video id="dcVideo" autoplay playsinline muted></video>
+        <canvas id="dcCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. This device</h2>
+      <table class="dc" id="envTable"></table>
+    </div>
+
+    <div class="panel">
+      <h2>3. Latest run</h2>
+      <table class="dc" id="runTable"><tr><td>No run yet.</td><td></td></tr></table>
+    </div>
+
+    <div class="panel">
+      <h2>4. Save the results</h2>
+      <p class="status">Each run is added below. Copy or download all runs from this session and send them with your recording sheet.</p>
+      <div class="controls">
+        <button id="copyBtn" type="button" disabled>Copy all runs (JSON)</button>
+        <button id="downloadBtn" type="button" disabled>Download all runs (JSON)</button>
+      </div>
+      <pre class="dc-json" id="jsonOut">[]</pre>
+    </div>
+  </main>
+
+  <script src="js/scoring.js"></script>
+  <script type="module">
+    import {
+      PoseLandmarker,
+      FilesetResolver,
+      DrawingUtils,
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+    const $ = (id) => document.getElementById(id);
+    const video = $("dcVideo");
+    const canvas = $("dcCanvas");
+    const ctx = canvas.getContext("2d");
+    const NUM_POSES = 2; // keep identical to js/capture.js
+    const runs = [];
+    let landmarker = null;
+    let delegateUsed = null;
+    let modelLoadMs = null;
+    let modelError = null;
+    let stream = null;
+    let orientationChanges = [];
+
+    const esc = (s) => String(s == null ? "—" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const table = (el, rows) => { el.innerHTML = rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join(""); };
+
+    function environment() {
+      const nav = navigator;
+      let webgl = false, webgl2 = false;
+      try { const c = document.createElement("canvas"); webgl = !!c.getContext("webgl"); webgl2 = !!c.getContext("webgl2"); } catch (e) { /* ignore */ }
+      return {
+        userAgent: nav.userAgent,
+        platform: nav.platform || null,
+        language: nav.language,
+        screen: `${screen.width}x${screen.height} @${window.devicePixelRatio}x`,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        orientation: screen.orientation ? screen.orientation.type : (window.innerHeight > window.innerWidth ? "portrait (inferred)" : "landscape (inferred)"),
+        cpuCores: nav.hardwareConcurrency || null,
+        deviceMemoryGB: nav.deviceMemory || null,
+        secureContext: window.isSecureContext,
+        getUserMedia: !!(nav.mediaDevices && nav.mediaDevices.getUserMedia),
+        webgl, webgl2,
+        webAssembly: typeof WebAssembly === "object",
+        speechSynthesis: typeof window.speechSynthesis !== "undefined",
+        speechVoices: typeof window.speechSynthesis !== "undefined" ? window.speechSynthesis.getVoices().length : 0,
+        localStorage: (() => { try { localStorage.setItem("_t", "1"); localStorage.removeItem("_t"); return true; } catch (e) { return false; } })(),
+      };
+    }
+
+    function renderEnv() {
+      const e = environment();
+      table($("envTable"), Object.entries(e));
+      return e;
+    }
+
+    async function loadModel() {
+      const t0 = performance.now();
+      try {
+        const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+        const modelAssetPath = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+        try {
+          landmarker = await PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath, delegate: "GPU" }, runningMode: "VIDEO", numPoses: NUM_POSES });
+          delegateUsed = "GPU";
+        } catch (err) {
+          landmarker = await PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath, delegate: "CPU" }, runningMode: "VIDEO", numPoses: NUM_POSES });
+          delegateUsed = "CPU (GPU failed: " + (err && err.message ? err.message : err) + ")";
+        }
+        modelLoadMs = Math.round(performance.now() - t0);
+        $("dcStatus").textContent = `Model ready (${delegateUsed}, loaded in ${modelLoadMs} ms). Choose a scenario and press Start check.`;
+      } catch (err) {
+        modelError = err && err.message ? err.message : String(err);
+        $("dcStatus").textContent = "Could not load the pose model: " + modelError;
+      }
+    }
+
+    async function ensureCamera() {
+      if (stream) return;
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" }, audio: false });
+      video.srcObject = stream;
+      await new Promise((r) => (video.onloadedmetadata = r));
+      await video.play();
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    function cameraInfo() {
+      const track = stream && stream.getVideoTracks()[0];
+      const s = track && track.getSettings ? track.getSettings() : {};
+      return {
+        requested: "640x480 facingMode=user",
+        actualWidth: video.videoWidth || s.width || null,
+        actualHeight: video.videoHeight || s.height || null,
+        frameRateSetting: s.frameRate || null,
+        facingModeSetting: s.facingMode || null,
+        label: track ? track.label : null,
+      };
+    }
+
+    window.addEventListener("orientationchange", () => orientationChanges.push({ atMs: Math.round(performance.now()), to: screen.orientation ? screen.orientation.type : null }));
+
+    async function runCheck() {
+      if (!landmarker) { $("dcStatus").textContent = "The pose model is not loaded, so a check cannot run."; return; }
+      $("runBtn").disabled = true;
+      try { await ensureCamera(); } catch (err) {
+        $("dcStatus").textContent = "Camera error: " + err.message;
+        const failed = finishRun({ error: "camera: " + err.message }, null);
+        runs.push(failed);
+        showLatest(failed);
+        refreshJson();
+        $("runBtn").disabled = false;
+        return;
+      }
+      const seconds = Number($("duration").value);
+      const tracker = FlexionScoring.createPersonTracker();
+      const detect = [];
+      const gaps = [];
+      const counts = { frames: 0, personFrames: 0, wholeBodyFrames: 0, feetCutFrames: 0, headCutFrames: 0, secondPersonFrames: 0, ambiguousFrames: 0 };
+      const peopleHist = {};
+      const statusHist = {};
+      orientationChanges = [];
+      let lastVideoTime = -1;
+      let lastTs = null;
+      const start = performance.now();
+      const drawer = new DrawingUtils(ctx);
+      $("dcStatus").textContent = `Running for ${seconds} s... carry out the scenario now.`;
+
+      await new Promise((resolve) => {
+        function loop() {
+          const now = performance.now();
+          const elapsed = (now - start) / 1000;
+          if (elapsed >= seconds) return resolve();
+          $("dcStatus").textContent = `Running... ${Math.max(0, seconds - elapsed).toFixed(0)} s left`;
+          if (video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            const t0 = performance.now();
+            const res = landmarker.detectForVideo(video, t0);
+            detect.push(performance.now() - t0);
+            if (lastTs != null) gaps.push(t0 - lastTs);
+            lastTs = t0;
+            const poses = res.landmarks || [];
+            const people = tracker.update(poses, t0);
+            counts.frames++;
+            peopleHist[people.peopleCount] = (peopleHist[people.peopleCount] || 0) + 1;
+            statusHist[people.status] = (statusHist[people.status] || 0) + 1;
+            if (people.peopleCount > 0) counts.personFrames++;
+            if (people.peopleCount > 1) counts.secondPersonFrames++;
+            if (people.status === "ambiguous" || people.status === "identity_lost") counts.ambiguousFrames++;
+            // Framing is judged on the person who is followed, as in the app.
+            const lm = people.lm;
+            if (lm) {
+              const q = FlexionScoring.computeFrameQuality(lm);
+              const f = FlexionScoring.diagnoseFraming(lm);
+              if ((q.tier === "good" || q.tier === "fair") && !f.needsMoreSpace) counts.wholeBodyFrames++;
+              if (f.reasons.indexOf("feet_cut_off") >= 0) counts.feetCutFrames++;
+              if (f.reasons.indexOf("head_cut_off") >= 0) counts.headCutFrames++;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            poses.forEach((p, i) => {
+              const followed = !!people.lm && i === people.lockedIndex; // grey when nobody is being followed
+              const color = followed ? undefined : "#9aa3b2";
+              drawer.drawLandmarks(p, { radius: 3, color });
+              drawer.drawConnectors(p, PoseLandmarker.POSE_CONNECTIONS, { color });
+            });
+          }
+          requestAnimationFrame(loop);
+        }
+        loop();
+      });
+
+      const durationMs = performance.now() - start;
+      const pct = (n) => (counts.frames ? Math.round((1000 * n) / counts.frames) / 10 : null);
+      const run = finishRun(null, {
+        seconds,
+        durationMs: Math.round(durationMs),
+        frames: counts.frames,
+        effectiveFps: Math.round((10 * counts.frames) / (durationMs / 1000)) / 10,
+        detectLatency: FlexionScoring.summariseTimings(detect),
+        frameIntervalMs: FlexionScoring.summariseTimings(gaps),
+        personFoundPct: pct(counts.personFrames),
+        wholeBodyOkPct: pct(counts.wholeBodyFrames),
+        feetCutOffPct: pct(counts.feetCutFrames),
+        headCutOffPct: pct(counts.headCutFrames),
+        secondPersonPct: pct(counts.secondPersonFrames),
+        identityUncertainPct: pct(counts.ambiguousFrames),
+        peopleCountHistogram: peopleHist,
+        trackerStatusHistogram: statusHist,
+        trackerSummary: tracker.summary(),
+        orientationChanges: orientationChanges.slice(),
+      });
+      runs.push(run);
+      showLatest(run);
+      refreshJson();
+      $("runBtn").disabled = false;
+      $("dcStatus").textContent = `Run ${runs.length} saved below. You can run another scenario.`;
+    }
+
+    function finishRun(err, metrics) {
+      const run = {
+        runAt: new Date().toISOString(),
+        tester: $("tester").value.trim() || null,
+        deviceName: $("deviceName").value.trim() || null,
+        scenario: $("scenario").value,
+        notes: $("notes").value.trim() || null,
+        environment: environment(),
+        model: { numPoses: NUM_POSES, delegate: delegateUsed, loadMs: modelLoadMs, error: modelError },
+        camera: cameraInfo(),
+        error: err ? err.error : null,
+        metrics: metrics,
+      };
+      return run;
+    }
+
+    function showLatest(run) {
+      const m = run.metrics || {};
+      table($("runTable"), [
+        ["Scenario", run.scenario],
+        ["Delegate", run.model.delegate],
+        ["Model load (ms)", run.model.loadMs],
+        ["Camera (actual)", run.camera.actualWidth ? `${run.camera.actualWidth}x${run.camera.actualHeight}` : null],
+        ["Frames / effective fps", m.frames != null ? `${m.frames} / ${m.effectiveFps}` : null],
+        ["Detection latency median / p95 / max (ms)", m.detectLatency ? `${m.detectLatency.medianMs} / ${m.detectLatency.p95Ms} / ${m.detectLatency.maxMs}` : null],
+        ["A person found (% of frames)", m.personFoundPct],
+        ["Whole body in view (% of frames)", m.wholeBodyOkPct],
+        ["Feet cut off (% of frames)", m.feetCutOffPct],
+        ["Second person in view (% of frames)", m.secondPersonPct],
+        ["Could not tell who to follow (% of frames)", m.identityUncertainPct],
+        ["Error", run.error],
+      ]);
+    }
+
+    function refreshJson() {
+      $("jsonOut").textContent = JSON.stringify(runs, null, 2);
+      $("copyBtn").disabled = !runs.length;
+      $("downloadBtn").disabled = !runs.length;
+    }
+
+    $("runBtn").addEventListener("click", runCheck);
+    $("copyBtn").addEventListener("click", async () => {
+      const text = JSON.stringify(runs, null, 2);
+      try { await navigator.clipboard.writeText(text); $("dcStatus").textContent = "Copied."; }
+      catch (e) { const r = document.createRange(); r.selectNodeContents($("jsonOut")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("dcStatus").textContent = "Could not copy automatically: the text is selected, copy it manually."; }
+    });
+    $("downloadBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(runs, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `flexion-device-check-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    $("speechBtn").addEventListener("click", () => {
+      if (typeof window.speechSynthesis === "undefined") { $("dcStatus").textContent = "Speech synthesis is not available in this browser."; return; }
+      const u = new SpeechSynthesisUtterance("Step back so your whole body is visible in the frame.");
+      let started = false;
+      u.onstart = () => { started = true; $("dcStatus").textContent = "Speech started. Did you hear it? Record yes or no on the sheet."; };
+      u.onend = () => { if (!started) $("dcStatus").textContent = "Speech ended without starting."; };
+      u.onerror = (e) => { $("dcStatus").textContent = "Speech error: " + (e && e.error); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+      setTimeout(() => { if (!started) $("dcStatus").textContent = "No speech started within 2 s. Record 'no speech' on the sheet (check the volume and silent switch first)."; }, 2000);
+    });
+
+    renderEnv();
+    if (window.speechSynthesis && window.speechSynthesis.addEventListener) window.speechSynthesis.addEventListener("voiceschanged", renderEnv);
+    loadModel();
+  </script>
+</body>
+
+</html>

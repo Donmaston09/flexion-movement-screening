@@ -57,7 +57,21 @@ function populatePatientFilter(reports) {
 function flattenSessions(reports) {
   const rows = [];
   reports.forEach((report) => {
-    report.routine.forEach((r) => {
+    // A session that could not be completed (for example not enough space
+    // to fit the whole body in view) has no movements, but it is still
+    // information for the clinician, so it gets a row stating why.
+    if (report.sessionOutcome && report.sessionOutcome.completed === false) {
+      rows.push({
+        patientName: report.patientName,
+        capturedAt: report.capturedAt,
+        stepKey: "session_incomplete",
+        stepLabel: "Session not completed",
+        walkingAid: report.sessionContext ? report.sessionContext.walkingAid : null,
+        flags: [report.sessionOutcome.failureReason || "session_incomplete"],
+        raw: {},
+      });
+    }
+    (report.routine || []).forEach((r) => {
       rows.push({
         patientName: report.patientName,
         capturedAt: report.capturedAt,

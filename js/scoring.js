@@ -165,13 +165,20 @@
   // Tracking dropout monitor
   // ---------------------------------------------------------------------
   // A movement being scored shouldn't silently keep counting through a
-  // real-world interruption — someone/something walks through frame, the
-  // patient steps out of view, a pet wanders in mid-test. This monitor
-  // watches the per-frame tracking-quality tier (from computeFrameQuality)
-  // across a step and reports whether tracking dropped out for long enough
-  // to cast doubt on that step's result, so the caller (capture.js) can
-  // both pause scoring while it's happening and flag the result afterward
-  // rather than reporting a number as if nothing went wrong.
+  // real-world interruption — the patient steps out of view, or part of
+  // them is hidden, or the camera loses them. This monitor watches the
+  // per-frame tracking-quality tier (from computeFrameQuality) across a
+  // step and reports whether tracking dropped out for long enough to cast
+  // doubt on that step's result, so the caller (capture.js) can both pause
+  // scoring while it's happening and flag the result afterward rather than
+  // reporting a number as if nothing went wrong.
+  //
+  // What it does NOT detect: a second person. If another person is fully
+  // visible and the pose model follows them instead, the frame still looks
+  // like a "good" frame of a body, so this monitor stays silent. That case
+  // is handled separately by createPersonTracker() (identity lock) above.
+  // Likewise it only sees poor tracking; it cannot tell whether there was
+  // enough room (see createSetupMonitor()).
   function createDropoutMonitor(opts) {
     const o = Object.assign({ minVisibility: 0.5, dropoutThresholdMs: 800 }, opts);
     const state = {
@@ -218,6 +225,344 @@
     }
 
     return { record, summary };
+  }
+
+  // ---------------------------------------------------------------------
+  // People in view: who is being assessed?
+  // ---------------------------------------------------------------------
+  // The pose model is asked for up to two people per frame. Previously it
+  // was asked for one, so if a helper (or anyone else) was fully visible
+  // the model could quietly switch to them: framing looked "good", the
+  // dropout monitor stayed silent, and the wrong person's movement was
+  // scored. The person tracker below keeps the identity of the person who
+  // was in view at set-up and only feeds *that* person's landmarks to the
+  // movement trackers. It is a simple geometric heuristic (position and
+  // size continuity of the torso), not a re-identification model: it has
+  // been tested on synthetic landmark sequences, and its behaviour with
+  // real people and real devices is the subject of the device test
+  // protocol, not a validated property.
+
+  const TORSO_SHOULDERS = [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER];
+  const TORSO_HIPS = [LM.LEFT_HIP, LM.RIGHT_HIP];
+  const MIN_PERSON_SCALE = 0.05; // in image units; smaller = too small/far to count as a person
+
+  // Where a pose sits in the image (centre of the visible torso points)
+  // and how big it is (torso length / shoulder width). Needs at least one
+  // visible shoulder and one visible hip; otherwise it is not countable.
+  function personAnchor(lm, minVisibility) {
+    if (!lm) return null;
+    const mv = minVisibility == null ? 0.5 : minVisibility;
+    const sh = TORSO_SHOULDERS.filter((i) => visible(lm, i, mv)).map((i) => lm[i]);
+    const hp = TORSO_HIPS.filter((i) => visible(lm, i, mv)).map((i) => lm[i]);
+    if (!sh.length || !hp.length) return null;
+    const mid = (pts) => ({ x: mean(pts.map((p) => p.x)), y: mean(pts.map((p) => p.y)) });
+    const s = mid(sh);
+    const h = mid(hp);
+    const torsoLen = Math.hypot(s.x - h.x, s.y - h.y);
+    const shoulderWidth = sh.length === 2 ? Math.hypot(sh[0].x - sh[1].x, sh[0].y - sh[1].y) : 0;
+    const scale = Math.max(torsoLen, shoulderWidth, 1e-6);
+    return { x: (s.x + h.x) / 2, y: (s.y + h.y) / 2, scale };
+  }
+
+  function createPersonTracker(opts) {
+    const o = Object.assign(
+      {
+        minVisibility: 0.5,
+        minScale: MIN_PERSON_SCALE,
+        baseGate: 0.8, // allowed jump between frames, in torso lengths
+        gatePerSec: 0.5, // extra allowance per second since the last match (lets a patient who stepped out and back in be re-found near where they were)
+        maxGate: 1.5, // never accept someone further than this from the last known position: a person across the room is a different person
+        scaleRatioMin: 0.6,
+        scaleRatioMax: 1.7,
+        ambiguityMargin: 0.35, // two candidates this close in cost = cannot tell them apart
+        othersMinMs: 500, // a second person must be in view this long to be flagged
+        identityMinMs: 800, // identity uncertain this long in one stretch to be flagged
+        policy: "flag", // "flag": keep scoring the locked person; "pause": withhold scoring while anyone else is in view
+      },
+      opts
+    );
+
+    let ref = null; // { x, y, scale } of the locked person
+    let lastTs = null;
+    let lastMatchTs = null;
+    let stats;
+
+    function freshStats() {
+      return { totalMs: 0, maxPeople: 0, otherPersonMs: 0, uncertainMs: 0, uncertainStreakMs: 0, worstUncertainMs: 0 };
+    }
+    stats = freshStats();
+
+    function result(status, lm, extra) {
+      return Object.assign({ status, lm: lm || null, lockedIndex: -1, peopleCount: 0, otherCount: 0, locked: !!ref }, extra);
+    }
+
+    // poses: array of landmark arrays (one per detected person).
+    function update(poses, timestampMs) {
+      const dtMs = lastTs == null ? 0 : Math.max(0, timestampMs - lastTs);
+      lastTs = timestampMs;
+      stats.totalMs += dtMs;
+
+      const cands = (poses || [])
+        .map((lm, index) => ({ lm, index, a: personAnchor(lm, o.minVisibility) }))
+        .filter((c) => c.a && c.a.scale >= o.minScale);
+      const peopleCount = cands.length;
+      stats.maxPeople = Math.max(stats.maxPeople, peopleCount);
+
+      const finish = (res, uncertain) => {
+        res.peopleCount = peopleCount;
+        res.locked = !!ref;
+        if (uncertain) {
+          stats.uncertainMs += dtMs;
+          stats.uncertainStreakMs += dtMs;
+          stats.worstUncertainMs = Math.max(stats.worstUncertainMs, stats.uncertainStreakMs);
+        } else {
+          stats.uncertainStreakMs = 0;
+        }
+        return res;
+      };
+
+      if (!ref) {
+        if (peopleCount === 0) return finish(result("no_person"), false);
+        if (peopleCount > 1) return finish(result("multiple_unlocked"), false);
+        ref = { x: cands[0].a.x, y: cands[0].a.y, scale: cands[0].a.scale };
+        lastMatchTs = timestampMs;
+        return finish(result("single", cands[0].lm, { lockedIndex: cands[0].index }), false);
+      }
+
+      if (peopleCount === 0) return finish(result("lost"), false);
+
+      const sinceMatchSec = Math.max(0, timestampMs - (lastMatchTs == null ? timestampMs : lastMatchTs)) / 1000;
+      const gate = Math.min(o.maxGate, o.baseGate + o.gatePerSec * sinceMatchSec);
+      const scored = cands
+        .map((c) => ({
+          c,
+          cost: Math.hypot(c.a.x - ref.x, c.a.y - ref.y) / ref.scale,
+          ratio: c.a.scale / ref.scale,
+        }))
+        .filter((s) => s.cost <= gate && s.ratio >= o.scaleRatioMin && s.ratio <= o.scaleRatioMax)
+        .sort((a, b) => a.cost - b.cost);
+
+      if (!scored.length) return finish(result("identity_lost", null, { otherCount: peopleCount }), true);
+      if (scored.length > 1 && scored[1].cost - scored[0].cost < o.ambiguityMargin) {
+        return finish(result("ambiguous", null, { otherCount: peopleCount - 1 }), true);
+      }
+
+      const best = scored[0].c;
+      ref = {
+        x: best.a.x,
+        y: best.a.y,
+        scale: 0.7 * ref.scale + 0.3 * best.a.scale,
+      };
+      lastMatchTs = timestampMs;
+      const otherCount = peopleCount - 1;
+      if (otherCount > 0) stats.otherPersonMs += dtMs;
+      if (otherCount > 0 && o.policy === "pause") {
+        return finish(result("others_present", null, { lockedIndex: best.index, otherCount }), false);
+      }
+      return finish(
+        result(otherCount > 0 ? "locked_others" : "single", best.lm, { lockedIndex: best.index, otherCount }),
+        false
+      );
+    }
+
+    function summary() {
+      return {
+        maxPeopleInView: stats.maxPeople,
+        otherPersonMs: Math.round(stats.otherPersonMs),
+        identityUncertainMs: Math.round(stats.uncertainMs),
+        worstIdentityUncertainMs: Math.round(stats.worstUncertainMs),
+        totalMs: Math.round(stats.totalMs),
+        secondPersonInView: stats.otherPersonMs >= o.othersMinMs,
+        identityUncertain: stats.worstUncertainMs >= o.identityMinMs,
+      };
+    }
+
+    // Clears the per-step counters but keeps the lock.
+    function resetStats() {
+      stats = freshStats();
+    }
+
+    // Forgets who was locked (call at the start of set-up).
+    function reset() {
+      ref = null;
+      lastTs = null;
+      lastMatchTs = null;
+      stats = freshStats();
+    }
+
+    function setPolicy(policy) {
+      o.policy = policy === "pause" ? "pause" : "flag";
+    }
+
+    return { update, summary, resetStats, reset, setPolicy, _options: o };
+  }
+
+  // Flags for a finished step, from createPersonTracker().summary().
+  function peopleFlags(sum) {
+    const flags = [];
+    if (sum && sum.identityUncertain) flags.push("identity_uncertain");
+    if (sum && sum.secondPersonInView) flags.push("second_person_in_view");
+    return flags;
+  }
+
+  // ---------------------------------------------------------------------
+  // Space and set-up check
+  // ---------------------------------------------------------------------
+  // The only way to find out whether there is enough room for the whole
+  // body to fit in the camera view is to see whether it fits. diagnoseFraming
+  // says *why* a frame does not give full-body tracking, and
+  // createSetupMonitor accumulates that over the set-up period so the app
+  // can stop with a specific reason ("not enough space") instead of
+  // looping on "step back" indefinitely, and record that reason in the report.
+
+  function diagnoseFraming(lm, opts) {
+    const o = Object.assign({ minVisibility: 0.5, edge: 0.03 }, opts);
+    if (!lm) return { reasons: ["no_pose"], needsMoreSpace: false, bodyHeightFrac: null };
+    const reasons = [];
+    const pts = lm.filter((p) => p && (p.visibility === undefined || p.visibility >= o.minVisibility));
+    let bodyHeightFrac = null;
+    if (pts.length >= 2) {
+      const ys = pts.map((p) => p.y);
+      bodyHeightFrac = Math.max(...ys) - Math.min(...ys);
+    }
+    // An ankle counts as "cut off" when it is tracked but at the very
+    // bottom edge, or is not tracked and its estimated position is at or
+    // beyond the bottom of the frame. An ankle that is simply not tracked
+    // while its estimated position is well inside the frame is an
+    // occlusion/lighting/clothing problem, not a space problem.
+    const ankles = [LM.LEFT_ANKLE, LM.RIGHT_ANKLE];
+    const cutAnkle = ankles.some((i) => {
+      const p = lm[i];
+      if (!p) return true;
+      const ok = visible(lm, i, o.minVisibility);
+      return ok ? p.y > 1 - o.edge : p.y > 0.93;
+    });
+    const ankleNotTracked = !cutAnkle && ankles.some((i) => !visible(lm, i, o.minVisibility));
+    const nose = lm[0];
+    const headCut = !!nose && nose.y < o.edge;
+    const torso = [...TORSO_SHOULDERS, ...TORSO_HIPS].filter((i) => visible(lm, i, o.minVisibility)).map((i) => lm[i]);
+    const sideCut = torso.some((p) => p.x < o.edge || p.x > 1 - o.edge);
+    if (cutAnkle) reasons.push("feet_cut_off");
+    if (ankleNotTracked) reasons.push("feet_not_tracked");
+    if (headCut) reasons.push("head_cut_off");
+    if (sideCut) reasons.push("side_cut_off");
+    if (bodyHeightFrac != null && bodyHeightFrac > 0.92) reasons.push("too_close");
+    if (!cutAnkle && !headCut && bodyHeightFrac != null && bodyHeightFrac < 0.3) reasons.push("too_far");
+    const needsMoreSpace = cutAnkle || headCut;
+    return { reasons, needsMoreSpace, bodyHeightFrac: bodyHeightFrac == null ? null : roundTo(bodyHeightFrac, 3) };
+  }
+
+  const SESSION_FAILURE = {
+    not_enough_space: {
+      label: "Not enough space",
+      patient:
+        "The camera could not see your whole body. There was probably not enough room between you and the camera. Try a larger space, or ask someone to place the device further back, then try again.",
+      clinician:
+        "Set-up timed out: the full body (shoulders to ankles) could not be brought into view, most often because the person could not get far enough from the camera.",
+    },
+    multiple_people: {
+      label: "More than one person in view",
+      patient:
+        "More than one person was in view during set-up, so the camera could not tell who to follow. Please make sure only the person being assessed is in view, then try again.",
+      clinician: "Set-up timed out: more than one person was in view and the person being assessed could not be identified.",
+    },
+    no_person_detected: {
+      label: "No one detected",
+      patient: "The camera could not find anyone. Check that the camera is on and pointing at the room, that the room is well lit, then try again.",
+      clinician: "Set-up timed out: no person was detected.",
+    },
+    too_far_from_camera: {
+      label: "Too far from the camera",
+      patient: "You appeared too small in the picture for the camera to track reliably. Move closer to the camera, then try again.",
+      clinician: "Set-up timed out: the person appeared too small in frame for reliable tracking.",
+    },
+    tracking_unreliable: {
+      label: "Tracking not reliable",
+      patient:
+        "The camera could not follow your body reliably. Good lighting and plain, contrasting clothing and background can help. Please try again.",
+      clinician: "Set-up timed out: landmarks were not reliably visible although the whole body appeared to be in frame (lighting, clothing, occlusion or device limits).",
+    },
+  };
+
+  function describeFailure(reason) {
+    return SESSION_FAILURE[reason] || null;
+  }
+
+  function createSetupMonitor(opts) {
+    const o = Object.assign({ timeoutMs: 30000, hintAfterMs: 10000 }, opts);
+    let startTs = null;
+    let lastTs = null;
+    const ms = { ok: 0, space: 0, multiple: 0, no_person: 0, too_far: 0, tracking: 0 };
+
+    // tier: computeFrameQuality tier; framing: diagnoseFraming result;
+    // peopleStatus: person-tracker status.
+    function record(tier, framing, peopleStatus, timestampMs) {
+      if (startTs == null) startTs = timestampMs;
+      const dt = lastTs == null ? 0 : Math.max(0, timestampMs - lastTs);
+      lastTs = timestampMs;
+      let cat;
+      if (peopleStatus === "multiple_unlocked") cat = "multiple";
+      else if (tier === "no_pose") cat = "no_person";
+      else if (framing && framing.needsMoreSpace) cat = "space"; // even if most landmarks are visible, ankles/head beyond the frame means the body does not fit
+      else if (tier === "good" || tier === "fair") cat = "ok";
+      else if (framing && framing.reasons && framing.reasons.indexOf("too_far") >= 0) cat = "too_far";
+      else cat = "tracking";
+      ms[cat] += dt;
+      return cat;
+    }
+
+    function dominant() {
+      let best = null;
+      let bestMs = 0;
+      ["space", "multiple", "no_person", "too_far", "tracking"].forEach((k) => {
+        if (ms[k] > bestMs) {
+          best = k;
+          bestMs = ms[k];
+        }
+      });
+      return best;
+    }
+
+    const REASON = {
+      space: "not_enough_space",
+      multiple: "multiple_people",
+      no_person: "no_person_detected",
+      too_far: "too_far_from_camera",
+      tracking: "tracking_unreliable",
+    };
+
+    function status(timestampMs) {
+      const elapsedMs = startTs == null ? 0 : Math.max(0, timestampMs - startTs);
+      const dom = dominant();
+      return {
+        elapsedMs: Math.round(elapsedMs),
+        shouldHint: elapsedMs >= o.hintAfterMs && dom != null,
+        hintReason: dom ? REASON[dom] : null,
+        failed: elapsedMs >= o.timeoutMs && dom != null,
+        failureReason: dom ? REASON[dom] : "no_person_detected",
+      };
+    }
+
+    function diagnostics() {
+      return {
+        okMs: Math.round(ms.ok),
+        notEnoughSpaceMs: Math.round(ms.space),
+        multiplePeopleMs: Math.round(ms.multiple),
+        noPersonMs: Math.round(ms.no_person),
+        tooFarMs: Math.round(ms.too_far),
+        trackingPoorMs: Math.round(ms.tracking),
+      };
+    }
+
+    return { record, status, diagnostics };
+  }
+
+  // Latency / frame-interval summary for device testing.
+  function summariseTimings(samples) {
+    const a = (samples || []).filter((v) => typeof v === "number" && isFinite(v)).sort((x, y) => x - y);
+    if (!a.length) return { n: 0, medianMs: null, p95Ms: null, maxMs: null };
+    const pct = (p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
+    return { n: a.length, medianMs: round1(pct(0.5)), p95Ms: round1(pct(0.95)), maxMs: round1(a[a.length - 1]) };
   }
 
   // ---------------------------------------------------------------------
@@ -658,6 +1003,8 @@
     limited_depth: "The squat was shallower than expected.",
     excess_trunk_lean: "You leaned forward more than expected during the squat.",
     tracking_interrupted: "The camera lost sight of you during this step, so the result may not be reliable. It can be repeated.",
+    identity_uncertain: "The camera could not be sure which person it was following during this step, so the result may not be reliable. It can be repeated.",
+    second_person_in_view: "Another person was in view of the camera during this step. The result is for the person being assessed, but a clinician may want to check it.",
   };
 
   // Builds a short, number-free summary for the person who did the
@@ -680,16 +1027,22 @@
         });
       });
     });
-    const headline = flaggedItems.length
+    const failure = ctx.failureReason ? describeFailure(ctx.failureReason) : null;
+    const headline = failure
+      ? "This session could not be completed. " + failure.patient
+      : flaggedItems.length
       ? "Some parts of this session were flagged for a clinician to look at."
       : "No parts of this session were flagged, but this does not mean that nothing is wrong.";
     return {
+      incomplete: !!failure,
       headline: headline,
       completed: completed,
       flaggedItems: flaggedItems,
       aidNote: walkingAidNote(ctx.walkingAid),
       nextSteps: [
-        "Share these results with the GP, physiotherapist or clinical team who asked you to do them. They can decide whether anything more is needed.",
+        failure
+          ? "Tell the GP, physiotherapist or clinical team who asked you to do this that it could not be completed, so they can arrange another way to assess you if needed."
+          : "Share these results with the GP, physiotherapist or clinical team who asked you to do them. They can decide whether anything more is needed.",
         "Contact your GP or physiotherapist sooner if you have had a fall, feel unsteady, or had pain during any movement.",
         "Stop any movement that feels unsafe or painful.",
       ],
@@ -719,6 +1072,14 @@
     getEvidence,
     computeFrameQuality,
     createDropoutMonitor,
+    personAnchor,
+    createPersonTracker,
+    peopleFlags,
+    diagnoseFraming,
+    createSetupMonitor,
+    describeFailure,
+    SESSION_FAILURE,
+    summariseTimings,
     createSquatTracker,
     createArmRaiseTracker,
     createBalanceTracker,

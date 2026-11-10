@@ -25,6 +25,7 @@ const trackingQualityEl = document.getElementById("trackingQuality");
 const includeAdvancedInput = document.getElementById("includeAdvanced");
 const audioToggleBtn = document.getElementById("audioToggleBtn");
 const walkingAidSelect = document.getElementById("walkingAid");
+const pauseIfOthersInput = document.getElementById("pauseIfOthers");
 
 function currentWalkingAid() {
   return FlexionScoring.normaliseWalkingAid(walkingAidSelect ? walkingAidSelect.value : "none");
@@ -210,6 +211,21 @@ function buildActiveRoutine(includeAdvanced) {
 
 let ROUTINE = CORE_MOVEMENTS.slice();
 
+// The pose model is asked for up to two people so that a second person can
+// be noticed at all (with one, the model silently follows whoever it likes).
+// FlexionScoring.createPersonTracker() decides which of them is the person
+// being assessed and only that person's landmarks are scored.
+const NUM_POSES = 2;
+// Set-up must succeed within this long, or the session stops with a stated
+// reason (usually: not enough room to fit the whole body in view).
+const SETUP_TIMEOUT_MS = 30000;
+const SETUP_HINT_AFTER_MS = 10000;
+const personTracker = FlexionScoring.createPersonTracker();
+let setupMonitor = null;
+let delegateUsed = null;
+let detectTimes = [];
+let sessionStartedAt = null;
+
 let poseLandmarker = null;
 let running = false;
 let mode = "idle"; // idle | calibrating | routine
@@ -236,15 +252,17 @@ async function initPoseLandmarker() {
     poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
       baseOptions: { modelAssetPath, delegate: "GPU" },
       runningMode: "VIDEO",
-      numPoses: 1,
+      numPoses: NUM_POSES,
     });
+    delegateUsed = "GPU";
   } catch (err) {
     statusEl.textContent = "Falling back to CPU mode for this device...";
     poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
       baseOptions: { modelAssetPath, delegate: "CPU" },
       runningMode: "VIDEO",
-      numPoses: 1,
+      numPoses: NUM_POSES,
     });
+    delegateUsed = "CPU";
   }
   statusEl.textContent = "Model loaded. Click Start Routine.";
 }
@@ -261,13 +279,19 @@ async function initCamera() {
   canvas.height = video.videoHeight;
 }
 
-function drawFrame(landmarkResult) {
+// The person being scored is drawn normally; anyone else is drawn in grey so
+// it is visible which person the app is following.
+function drawFrame(landmarkResult, lockedIndex) {
   ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (landmarkResult && landmarkResult.landmarks && landmarkResult.landmarks[0]) {
+  if (landmarkResult && landmarkResult.landmarks) {
     const drawer = new DrawingUtils(ctx);
-    drawer.drawLandmarks(landmarkResult.landmarks[0], { radius: 3 });
-    drawer.drawConnectors(landmarkResult.landmarks[0], PoseLandmarker.POSE_CONNECTIONS);
+    landmarkResult.landmarks.forEach((lms, i) => {
+      const followed = i === lockedIndex; // lockedIndex is -1 when nobody is being followed: then everyone is grey
+      const color = followed ? undefined : "#9aa3b2";
+      drawer.drawLandmarks(lms, { radius: 3, color });
+      drawer.drawConnectors(lms, PoseLandmarker.POSE_CONNECTIONS, { color });
+    });
   }
   ctx.restore();
 }
@@ -284,9 +308,14 @@ function renderLoop() {
     lastVideoTime = video.currentTime;
     const nowMs = performance.now();
     const result = poseLandmarker.detectForVideo(video, nowMs);
-    drawFrame(result);
+    if (detectTimes.length < 3000) detectTimes.push(performance.now() - nowMs);
 
-    const lm = result.landmarks && result.landmarks[0];
+    // Decide which detected person is the one being assessed. Everything
+    // below (framing quality, dropout monitoring, scoring) uses only that
+    // person's landmarks, never simply "the first pose in the list".
+    const people = personTracker.update(result.landmarks || [], nowMs);
+    drawFrame(result, people.lm ? people.lockedIndex : -1);
+    const lm = people.lm;
     // Judge framing against the view the current step asks for (a
     // side-on step is only expected to track the camera-facing side).
     const activeStep = mode === "routine" ? ROUTINE[stepIndex] : null;
@@ -294,7 +323,7 @@ function renderLoop() {
     updateTrackingQualityUI(quality);
 
     if (mode === "calibrating") {
-      runCalibrationFrame(quality, nowMs);
+      runCalibrationFrame(quality, nowMs, people, lm);
     } else if (mode === "routine") {
       const step = ROUTINE[stepIndex];
       if (step && currentTracker) {
@@ -306,13 +335,26 @@ function renderLoop() {
         // long as tracking stays poor, tell the patient what's happening,
         // and flag the result afterward so a provider knows this step's
         // numbers may be affected.
+        //
+        // A second person is a different problem from a dropout: the model
+        // can follow a fully visible helper and every frame then looks like
+        // good tracking. That is handled by the person tracker: scoring is
+        // withheld whenever it cannot say which person is being assessed.
         const dropoutActive = currentDropout ? currentDropout.record(quality.tier, nowMs) : false;
-        if (dropoutActive) {
-          instructionEl.textContent = "Tracking interrupted — please step back into frame.";
-          speak("Tracking lost. Please step back into frame.");
+        if (dropoutActive || !lm) {
+          if (dropoutActive || people.status !== "lost") {
+            const msg = pauseMessage(people.status);
+            instructionEl.textContent = msg;
+            speak(msg);
+          }
         } else {
           currentTracker.addFrame(lm, nowMs);
           metricEl.textContent = step.liveText(currentTracker);
+          if (instructionEl.dataset.paused) {
+            instructionEl.textContent = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${stepInstruction(step)}`;
+            delete instructionEl.dataset.paused;
+            lastSpoken = null;
+          }
         }
 
         const elapsed = (nowMs - stepStartTs) / 1000;
@@ -336,8 +378,41 @@ function renderLoop() {
 // setup doesn't silently produce unreliable scores (see literature note
 // on framing/space constraints in Ruder et al. 2026 and Tanaka et al.
 // 2020's call for standardized virtual-exam setup).
-function runCalibrationFrame(quality, nowMs) {
-  const framingOk = quality.tier === "good" || quality.tier === "fair";
+function pauseMessage(status) {
+  instructionEl.dataset.paused = "1";
+  if (status === "ambiguous" || status === "identity_lost") {
+    return "I can't tell which person to follow. Please make sure the person being assessed is clearly separate from anyone else in view.";
+  }
+  if (status === "others_present") {
+    return "Another person is in view, so scoring is paused. Please ask them to step out of view.";
+  }
+  return "Tracking interrupted — please step back into frame.";
+}
+
+function runCalibrationFrame(quality, nowMs, people, lm) {
+  // During set-up exactly one person may be in view. The identity lock only
+  // survives while that stays true, so the person who completes set-up is
+  // the person who is then followed. (Once the routine starts, a helper may
+  // stand beside the patient; they are tracked as "another person", see
+  // createPersonTracker.)
+  const multiple = people.peopleCount > 1;
+  if (people.peopleCount !== 1) personTracker.reset();
+  const framing = FlexionScoring.diagnoseFraming(lm);
+  setupMonitor.record(quality.tier, framing, multiple ? "multiple_unlocked" : people.status, nowMs);
+  const setup = setupMonitor.status(nowMs);
+  if (setup.failed) {
+    failSession(setup.failureReason);
+    return;
+  }
+  if (multiple) {
+    calibrationGoodSinceTs = null;
+    timerEl.textContent = "";
+    const msg = "More than one person is in view. For set-up, only the person being assessed should be in the picture.";
+    instructionEl.textContent = msg;
+    speak(msg);
+    return;
+  }
+  const framingOk = (quality.tier === "good" || quality.tier === "fair") && !framing.needsMoreSpace;
   if (framingOk) {
     if (calibrationGoodSinceTs == null) calibrationGoodSinceTs = nowMs;
     const heldMs = nowMs - calibrationGoodSinceTs;
@@ -347,18 +422,50 @@ function runCalibrationFrame(quality, nowMs) {
     if (heldMs >= CALIBRATION_HOLD_MS) {
       mode = "routine";
       timerEl.textContent = "";
+      personTracker.resetStats();
       advanceStep();
     }
   } else {
     calibrationGoodSinceTs = null;
     timerEl.textContent = "";
-    const msg =
+    let msg =
       quality.tier === "no_pose"
         ? "No one detected. Step into frame, facing the camera."
         : "Step back so your whole body — shoulders to ankles — is visible in the frame.";
+    // If this has gone on for a while and the cause is room, say what to do
+    // and that the session will stop rather than loop for ever.
+    if (setup.shouldHint && setup.hintReason === "not_enough_space") {
+      msg = "Your whole body still does not fit in the picture. If you cannot step back any further, move the device back or use a bigger space. The session will stop soon if it still does not fit.";
+    } else if (setup.shouldHint && setup.hintReason === "tracking_unreliable") {
+      msg = "The camera is having trouble following you. Check the room is well lit and that nothing is in front of you.";
+    }
     instructionEl.textContent = msg;
     speak(msg);
   }
+}
+
+// Ends the session during set-up with a stated reason, and keeps a record of
+// it: an incomplete session saved with its reason is information (the person
+// could not do the screen here), whereas a session that just spins is not.
+let sessionOutcome = { completed: true, failureReason: null };
+function failSession(reason) {
+  running = false;
+  mode = "idle";
+  const info = FlexionScoring.describeFailure(reason);
+  sessionOutcome = {
+    completed: false,
+    failureReason: reason,
+    failureLabel: info ? info.label : reason,
+    clinicianNote: info ? info.clinician : null,
+    setupDiagnostics: setupMonitor ? setupMonitor.diagnostics() : null,
+  };
+  const msg = info ? `Could not complete: ${info.label.toLowerCase()}. ${info.patient}` : "Could not complete the screening.";
+  instructionEl.textContent = msg;
+  speak(info ? info.patient : msg);
+  timerEl.textContent = "";
+  metricEl.textContent = "";
+  statusEl.textContent = `Session not completed — ${info ? info.label : reason}. You can save this so the reason is recorded, or try again.`;
+  renderSummary();
 }
 
 function stepInstruction(step) {
@@ -382,6 +489,13 @@ function advanceStep() {
       summary.flags = (summary.flags || []).concat("tracking_interrupted");
       summary.trackingInterruption = dropoutSummary;
     }
+    // Same for other people in view and for not being sure who was being
+    // followed (see createPersonTracker).
+    const peopleSummary = personTracker.summary();
+    const peopleFlags = FlexionScoring.peopleFlags(peopleSummary);
+    if (peopleFlags.length) summary.flags = (summary.flags || []).concat(peopleFlags);
+    summary.peopleInView = peopleSummary;
+    personTracker.resetStats();
     results.push(summary);
   }
   stepIndex += 1;
@@ -392,6 +506,7 @@ function advanceStep() {
   const step = ROUTINE[stepIndex];
   currentTracker = step.makeTracker();
   currentDropout = FlexionScoring.createDropoutMonitor();
+  delete instructionEl.dataset.paused;
   stepStartTs = performance.now();
   const msg = `${stepIndex + 1}/${ROUTINE.length} — ${step.label}: ${stepInstruction(step)}`;
   instructionEl.textContent = msg;
@@ -400,6 +515,7 @@ function advanceStep() {
 
 function finishRoutine() {
   running = false;
+  sessionOutcome = { completed: true, failureReason: null };
   instructionEl.textContent = "Routine complete.";
   timerEl.textContent = "";
   metricEl.textContent = "";
@@ -411,7 +527,10 @@ function escapeText(s) {
 }
 
 function renderPlainSummary() {
-  const plain = FlexionScoring.plainLanguageSummary(results, { walkingAid: currentWalkingAid() });
+  const plain = FlexionScoring.plainLanguageSummary(results, {
+    walkingAid: currentWalkingAid(),
+    failureReason: sessionOutcome.completed ? null : sessionOutcome.failureReason,
+  });
   const flagged = plain.flaggedItems.length
     ? `<ul>${plain.flaggedItems.map((f) => `<li><strong>${escapeText(f.movement)}:</strong> ${escapeText(f.text)}</li>`).join("")}</ul>`
     : "";
@@ -429,6 +548,12 @@ function renderPlainSummary() {
 function renderSummary() {
   summaryEl.innerHTML = "";
   renderPlainSummary();
+  if (!sessionOutcome.completed) {
+    const note = document.createElement("div");
+    note.className = "score-card";
+    note.innerHTML = `<h3>Session not completed</h3><div class="flags">⚠ ${escapeText(sessionOutcome.failureLabel || sessionOutcome.failureReason)}</div><p>${escapeText(sessionOutcome.clinicianNote || "")}</p>`;
+    summaryEl.appendChild(note);
+  }
   results.forEach((r) => {
     const card = document.createElement("div");
     card.className = "score-card";
@@ -463,6 +588,21 @@ function labelize(k) {
   return k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
 
+function collectTechnical() {
+  const nav = typeof navigator !== "undefined" ? navigator : {};
+  const orient = typeof screen !== "undefined" && screen.orientation ? screen.orientation.type : null;
+  return {
+    numPosesRequested: NUM_POSES,
+    delegate: delegateUsed,
+    cameraResolution: video && video.videoWidth ? `${video.videoWidth}x${video.videoHeight}` : null,
+    screenOrientation: orient,
+    speechSynthesis: typeof window.speechSynthesis !== "undefined",
+    detectLatency: FlexionScoring.summariseTimings(detectTimes),
+    userAgent: nav.userAgent || null,
+    startedAt: sessionStartedAt,
+  };
+}
+
 function buildReport() {
   const patientName = patientNameInput.value.trim() || "Unnamed Patient";
   return {
@@ -473,7 +613,15 @@ function buildReport() {
       walkingAid: currentWalkingAid(),
       intendedUse: "movement-based screening aid for clinician review; not diagnostic",
     },
-    plainLanguageSummary: FlexionScoring.plainLanguageSummary(results, { walkingAid: currentWalkingAid() }),
+    plainLanguageSummary: FlexionScoring.plainLanguageSummary(results, {
+      walkingAid: currentWalkingAid(),
+      failureReason: sessionOutcome.completed ? null : sessionOutcome.failureReason,
+    }),
+    sessionOutcome,
+    // Technical details of the run, used for device testing and for
+    // understanding why a session did or did not work. No video, images or
+    // landmark coordinates are included.
+    technical: collectTechnical(),
     routine: results,
     // Mock FHIR-style observations so a real integration can map 1:1
     // onto Observation resources pushed to the patient's record. The
@@ -521,6 +669,12 @@ startBtn.addEventListener("click", async () => {
   currentDropout = null;
   lastSpoken = null;
   calibrationGoodSinceTs = null;
+  sessionOutcome = { completed: true, failureReason: null };
+  detectTimes = [];
+  sessionStartedAt = new Date().toISOString();
+  personTracker.reset();
+  personTracker.setPolicy(pauseIfOthersInput && pauseIfOthersInput.checked ? "pause" : "flag");
+  setupMonitor = FlexionScoring.createSetupMonitor({ timeoutMs: SETUP_TIMEOUT_MS, hintAfterMs: SETUP_HINT_AFTER_MS });
   ROUTINE = buildActiveRoutine(!!(includeAdvancedInput && includeAdvancedInput.checked));
   summaryEl.innerHTML = "";
   saveBtn.disabled = true;

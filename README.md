@@ -80,7 +80,8 @@ even on otherwise-accurate systems. Three concrete changes came out of that:
   monitoring, and the evidence-tier table. Framework-free so it runs
   identically in the browser and in Node.
 - `test/scoring.test.js` — unit tests for the scoring math, run with
-  `node test/scoring.test.js` (25 tests, no camera needed).
+  `node test/scoring.test.js` (49 tests, no camera needed). The new
+  people-in-view and set-up tests use synthetic landmarks.
 - `literature_research_on_the_app.docx` / `literature_citations_on_app.csv`
   — the literature review this version of the app is grounded in.
 
@@ -139,7 +140,53 @@ unsafely. Three changes came out of that review:
    per-frame tracking quality during a step, pauses scoring while tracking
    is lost rather than silently miscounting through it, and flags the
    result (`tracking_interrupted`) if a step was affected — see
-   `js/capture.js`'s `renderLoop()` and `advanceStep()`.
+   `js/capture.js`'s `renderLoop()` and `advanceStep()`. (An earlier version
+   of the code comment said this also covered someone walking through the
+   frame. It does not: see the next section.)
+
+### Other people in view, and not enough space
+
+Added after an external review asked what happens if more than one person is
+in the picture, or if there is not enough room to do the movements.
+
+- **Other people.** The pose model is now asked for up to two people
+  (`numPoses: 2`; it was 1). `FlexionScoring.createPersonTracker()` keeps the
+  identity of the person who was alone in view when set-up finished, using
+  only position and size continuity of their torso, and passes **only that
+  person's landmarks** to the scoring code. With one pose requested, the
+  model could switch to a fully visible helper and every frame would still
+  look like good tracking, so the dropout monitor stayed silent and the
+  wrong person's movement could be scored.
+  - A helper who stands beside the person is allowed by default. They are
+    drawn in grey, and any step during which a second person was in view for
+    more than half a second is flagged `second_person_in_view`.
+  - If the app cannot tell which person it is following (the patient leaves
+    and only a helper remains, or two people overlap), scoring is paused,
+    the patient is told, and the step is flagged `identity_uncertain` (plus
+    `tracking_interrupted`).
+  - The checkbox **"Pause scoring whenever a second person is in view"**
+    makes the app stricter: scoring stops while anyone else is in view.
+  - During set-up exactly one person must be in view.
+- **Space.** Set-up now also checks that the ankles and head are inside the
+  frame (`diagnoseFraming()`), not just that most landmarks are visible
+  (previously a person with both ankles out of frame still scored 75% and
+  passed as "fair"). If set-up has not succeeded after 30 seconds, the
+  session **stops with a stated reason** instead of repeating "step back"
+  for ever. The reason (`not_enough_space`, `multiple_people`,
+  `no_person_detected`, `too_far_from_camera` or `tracking_unreliable`) is
+  shown to the person, written into the report as `sessionOutcome`, and
+  appears on the provider dashboard as a "Session not completed" row.
+- **Technical details.** Each report now includes a `technical` block
+  (delegate GPU/CPU, camera resolution, screen orientation, speech support,
+  pose-detection latency, user agent) for device testing. It contains no
+  video, images or landmark coordinates.
+
+These behaviours are tested on synthetic landmark sequences and with a
+scripted stand-in for the pose model in a desktop browser. **They have not
+yet been tested with real people, or on phones and tablets**; the thresholds
+(0.8 torso lengths per frame, 30 s set-up limit and so on) are starting
+values. See `device-check.html` and `docs/device-test-protocol.md` for the
+protocol that will test them.
 
 A known limitation not yet fixed in code: on some MacBooks, the camera
 appears to auto-frame on the face rather than the full body (likely macOS's
@@ -252,6 +299,13 @@ structured comparison with rehabilitation apps already in use.
 
 ## Known limitations (by design, for a prototype)
 
+- Behaviour with more than one person, in limited space, and on different
+  devices has been checked only on synthetic data and in desktop Chromium
+  with a stand-in for the pose model; the device test protocol is the
+  planned check. The identity lock is a geometric heuristic, not a
+  re-identification model: it will not follow a patient who is carried
+  across the room by a helper, and it will not resume by itself if the
+  patient reappears far from where they were last seen.
 - Single camera, 2D landmarks only — no depth, so angles are estimates
   and sensitive to camera angle (this is exactly what the pilot study in
   the spec doc is meant to quantify against real PT assessments).
